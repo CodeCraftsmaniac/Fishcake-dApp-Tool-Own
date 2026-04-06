@@ -463,6 +463,3 @@ export function stopHealthMonitoring(): void {
     healthCheckInterval = null;
   }
 }
-
-// Export for direct access
-export { RPC_ENDPOINTS };

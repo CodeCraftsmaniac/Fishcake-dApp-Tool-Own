@@ -153,13 +153,17 @@ export const walletApi = {
  * Mining Automation APIs
  */
 export const miningApi = {
-  // Get automation status
-  status: () => apiFetch<{ running: boolean; wallets: string[] }>('/api/mining/automation/status'),
+  // Get automation status (full status with scheduler, config, stats)
+  status: () => apiFetch<{ 
+    scheduler: { isRunning: boolean; processingCount: number };
+    config: Record<string, unknown>;
+    stats: Record<string, unknown>;
+  }>('/api/mining/status'),
 
   // Start automation
-  start: (passphrase: string, walletAddresses?: string[]) => 
+  start: (passphrase: string, walletAddresses?: string[]) =>
     apiFetch<{ success: boolean; message: string }>(
-      '/api/mining/automation/start',
+      '/api/mining/start',
       {
         method: 'POST',
         body: JSON.stringify({ passphrase, walletAddresses }),
@@ -169,7 +173,7 @@ export const miningApi = {
   // Stop automation
   stop: () => 
     apiFetch<{ success: boolean }>(
-      '/api/mining/automation/stop',
+      '/api/mining/stop',
       { method: 'POST' }
     ),
 

@@ -52,3 +52,5 @@ coverage/
 
 # Reference repos (development only)
 reference-repos-for-tool/
+# Ignore database files
+backend/data/
