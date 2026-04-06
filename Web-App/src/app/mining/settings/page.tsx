@@ -51,50 +51,7 @@ export default function MiningSettingsPage() {
   const rewardPerEvent = totalPerEvent * 0.25;
 
   return (
-    <div className="space-y-8">
-      {/* Header Section with Action Buttons */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-200">
-            <Settings2 className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight">Configuration</h1>
-            <p className="text-xs text-gray-600 font-semibold">Customize your mining automation parameters</p>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-3">
-          <Button 
-            onClick={handleReset} 
-            variant="outline"
-            className="px-6 h-11 text-sm border-2 border-gray-200 hover:bg-gray-50 font-bold transition-all"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Reset to Defaults
-          </Button>
-          
-          <Button 
-            onClick={handleSave} 
-            disabled={isSaving}
-            className="px-8 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 h-11 text-sm text-white font-bold shadow-lg shadow-purple-200 hover:shadow-xl transition-all"
-          >
-            {isSaving ? (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                Saving Changes...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                Save Configuration
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
+    <div className="space-y-6">
       {/* Main Configuration Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
@@ -294,6 +251,36 @@ export default function MiningSettingsPage() {
           </Card>
 
         </div>
+      </div>
+
+      {/* Action Buttons - Bottom Right */}
+      <div className="flex justify-end gap-3 pt-2">
+        <Button 
+          onClick={handleReset} 
+          variant="outline"
+          className="px-6 h-11 text-sm border-2 border-gray-200 hover:bg-gray-50 font-bold transition-all"
+        >
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Reset to Defaults
+        </Button>
+        
+        <Button 
+          onClick={handleSave} 
+          disabled={isSaving}
+          className="px-8 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 h-11 text-sm text-white font-bold shadow-lg shadow-purple-200 hover:shadow-xl transition-all"
+        >
+          {isSaving ? (
+            <>
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Saving Changes...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              Save Configuration
+            </>
+          )}
+        </Button>
       </div>
     </div>
   );
