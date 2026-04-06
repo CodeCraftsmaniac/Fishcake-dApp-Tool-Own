@@ -5,3 +5,4 @@ export { Badge, badgeVariants } from './Badge';
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './Tooltip';
 export { Progress } from './Progress';
 export { Skeleton } from './Skeleton';
+export { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from './dialog';
