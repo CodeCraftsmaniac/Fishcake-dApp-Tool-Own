@@ -1053,6 +1053,174 @@ export class EventProcessor {
 
 ## User Experience Flow
 
+### Mining Automation Page (Web UI)
+
+The Mining Automation feature is accessible via a dedicated sidebar link with:
+- Animated colorful gradient border
+- Moving grid/glow effect
+- Pulse indicator showing active status
+
+### Visual Workflow UI (n8n-style)
+
+The workflow canvas displays nodes in a visual flow:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    VISUAL WORKFLOW CANVAS                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│    ┌──────────┐      ┌──────────┐      ┌──────────┐                 │
+│    │ MINT NFT │──────│  CREATE  │──────│  DROP 1  │                 │
+│    │   PASS   │      │  EVENT   │      │  12 FCC  │                 │
+│    └──────────┘      └──────────┘      └────┬─────┘                 │
+│         ○                 ○                 │                        │
+│      skipped           running             ▼                        │
+│                                       ┌──────────┐                  │
+│                                       │  DROP 2  │                  │
+│                                       │  12 FCC  │                  │
+│                                       └────┬─────┘                  │
+│                                            │                        │
+│    ┌──────────┐      ┌──────────┐      ┌───▼──────┐                 │
+│    │  FINISH  │◄─────│  CHECK   │◄─────│ VALIDATE │                 │
+│    │  EVENT   │      │  REWARD  │      │   2/2    │                 │
+│    └──────────┘      └──────────┘      └──────────┘                 │
+│         ○                 ○                 ●                        │
+│      pending           pending          completed                   │
+│                                                                      │
+│   ● = completed   ◐ = running   ○ = pending   ✖ = failed           │
+│                                                                      │
+│   [START AUTOMATION]  [STOP]  [RESET]                               │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+Each node shows:
+- **Status indicator** (color-coded ring)
+- **Name** (action being performed)
+- **Details** (amounts, addresses, etc.)
+- **Animated connections** (flowing dashes when running)
+
+### Node Status Colors
+
+| Status | Color | Animation |
+|--------|-------|-----------|
+| Pending | Gray | None |
+| Running | Blue | Pulsing glow |
+| Completed | Green | Checkmark |
+| Failed | Red | Warning icon |
+| Skipped | Purple | Dash icon |
+
+### Tabs in Mining Automation Page
+
+1. **Workflow** - Visual workflow canvas with real-time execution
+2. **Wallets** - Manage imported wallets (add, remove, pause)
+3. **Logs** - Full execution history with filters
+4. **Settings** - Configure recipients, scheduler, retry logic
+
+---
+
+## Implemented Components
+
+### Frontend (Web-App)
+
+| File | Purpose |
+|------|---------|
+| `src/app/mining/page.tsx` | Main mining page with tabs |
+| `src/components/mining/WorkflowCanvas.tsx` | Visual n8n-style workflow |
+| `src/components/mining/WalletManager.tsx` | Wallet import/management |
+| `src/components/mining/ExecutionLogs.tsx` | Log viewer with filters |
+| `src/components/mining/MiningStats.tsx` | Statistics cards |
+| `src/lib/stores/miningStore.ts` | Zustand state management |
+
+### Backend
+
+| File | Purpose |
+|------|---------|
+| `src/mining/MiningAutomationEngine.ts` | Core automation engine |
+| `src/mining/miningRoutes.ts` | REST API endpoints |
+| `src/mining/index.ts` | Barrel exports |
+
+### Sidebar Integration
+
+The Mining Automation link in the sidebar features:
+- Gradient border animation (rotates through fishcake colors)
+- Grid flow background animation
+- Green pulse indicator when automation is active
+- Hover glow effects
+
+---
+
+## Complete User Journey
+
+### Step 1: Access Mining Automation
+1. Click "Mining Automation" in sidebar (highlighted with animations)
+2. Landing on workflow tab showing empty state
+
+### Step 2: Configure Wallets
+1. Switch to "Wallets" tab
+2. Click "Add Wallet"
+3. Enter private key + passphrase
+4. Wallet encrypted and stored
+5. System auto-fetches NFT status and balances
+
+### Step 3: Configure Recipients
+1. Switch to "Settings" tab
+2. Enter Recipient Address 1
+3. Enter Recipient Address 2
+4. Save configuration
+
+### Step 4: Start Automation
+1. Return to "Workflow" tab
+2. Click "Start Automation"
+3. Watch nodes execute in real-time:
+   - Mint NFT (if needed) → yellow → green
+   - Create Event → yellow → green
+   - Drop 1 → yellow → green
+   - Drop 2 → yellow → green
+   - Validate → yellow → green
+   - Check Reward → yellow → (monitoring for 6 FCC)
+   - Finish Event → yellow → green
+
+### Step 5: Monitor Progress
+1. "Logs" tab shows all transactions
+2. "Wallets" tab shows per-wallet status
+3. Stats show totals: events completed, FCC earned, etc.
+
+### Step 6: Daily Automation
+- System automatically repeats every 24+ hours
+- +5 minute offset from previous completion
+- No manual intervention needed
+- View history in Logs tab
+
+---
+
+## Backend Auto-Behavior
+
+When scheduler is enabled, the backend:
+
+1. **Every Minute**: Checks for wallets ready for new events
+2. **When Ready**: Executes full workflow automatically
+3. **On Success**: Schedules next event (+5 min offset)
+4. **On Failure**: Retries up to 3 times, then pauses wallet
+5. **NFT Expiry**: Monitors and alerts before expiration
+6. **Balance Check**: Skips wallets with insufficient FCC/POL
+
+---
+
+## Production Deployment Checklist
+
+- [ ] Environment variables configured (RPC_URL, DATABASE_PATH)
+- [ ] SSL certificates installed
+- [ ] Rate limiting enabled
+- [ ] Logging to file enabled
+- [ ] Backup strategy for database
+- [ ] Monitoring alerts configured
+- [ ] API authentication enabled
+
+---
+
+*End of Mining Automation System Specification*
+
 ### Web UI Dashboard
 
 ```

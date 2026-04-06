@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Zap,
   BookUser,
+  Cpu,
 } from 'lucide-react';
 
 const navItems = [
@@ -36,6 +37,7 @@ const quickActions = [
 export function Sidebar() {
   const pathname = usePathname();
   const { sidebarOpen, toggleSidebar } = useUIStore();
+  const isMiningActive = pathname === '/mining';
 
   return (
     <aside
@@ -67,6 +69,81 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
+          {/* Mining Automation - Featured */}
+          <div className="mb-6">
+            {sidebarOpen && (
+              <p className="px-3 mb-3 text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                ⚡ Automation
+              </p>
+            )}
+            <Link
+              href="/mining"
+              prefetch={true}
+              className={cn(
+                'relative flex items-center gap-3 px-3 py-3 rounded-xl transition-all overflow-hidden group',
+                isMiningActive
+                  ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white shadow-lg shadow-purple-500/30'
+                  : 'bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-orange-500/10'
+              )}
+            >
+              {/* Animated gradient border */}
+              {!isMiningActive && (
+                <div className="absolute inset-0 rounded-xl p-[2px] bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 opacity-50 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute inset-[2px] rounded-[10px] bg-card" />
+                </div>
+              )}
+              
+              {/* Animated grid overlay */}
+              <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity">
+                <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff1a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff1a_1px,transparent_1px)] bg-[size:8px_8px] animate-grid-flow" />
+              </div>
+              
+              {/* Glow effect */}
+              <div className={cn(
+                'absolute -inset-1 rounded-xl blur-xl transition-opacity',
+                isMiningActive ? 'opacity-30' : 'opacity-0 group-hover:opacity-20',
+                'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500'
+              )} />
+              
+              {/* Content */}
+              <div className={cn(
+                'relative z-10 p-2 rounded-lg',
+                isMiningActive 
+                  ? 'bg-white/20' 
+                  : 'bg-gradient-to-br from-purple-500/20 to-pink-500/20'
+              )}>
+                <Cpu className={cn(
+                  'h-5 w-5 flex-shrink-0',
+                  isMiningActive ? 'text-white' : 'text-purple-400'
+                )} />
+              </div>
+              {sidebarOpen && (
+                <div className="relative z-10">
+                  <span className={cn(
+                    'text-sm font-semibold whitespace-nowrap',
+                    isMiningActive ? 'text-white' : 'text-purple-400'
+                  )}>
+                    Mining Automation
+                  </span>
+                  <span className={cn(
+                    'block text-[10px] uppercase tracking-wider',
+                    isMiningActive ? 'text-white/70' : 'text-purple-400/60'
+                  )}>
+                    Visual Workflow
+                  </span>
+                </div>
+              )}
+              
+              {/* Pulse indicator */}
+              <div className="absolute top-2 right-2 z-10">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+              </div>
+            </Link>
+          </div>
+
           {/* Quick Actions */}
           <div className="mb-6">
             {sidebarOpen && (

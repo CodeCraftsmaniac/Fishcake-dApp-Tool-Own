@@ -26,6 +26,9 @@ export type {
     WalletBalances,
 } from './types/index.js';
 
+// Mining Automation Engine
+export * from './mining/index.js';
+
 // Version info
 export const BACKEND_VERSION = '1.0.0';
 
