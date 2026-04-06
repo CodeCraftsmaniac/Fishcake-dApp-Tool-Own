@@ -8,8 +8,19 @@ import {
   Droplets, 
   Gift,
   TrendingUp,
-  Clock
+  Clock,
+  Coins,
+  Activity,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
+import { WalletMiningStats } from './WalletMiningStats';
+
+// Format address for display
+const formatAddress = (address: string) => {
+  if (!address) return '';
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+};
 
 export function MiningStats() {
   const { stats, wallets, events, isAutomationRunning } = useMiningStore();
@@ -78,32 +89,43 @@ export function MiningStats() {
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      {statCards.map((stat, index) => {
-        const Icon = stat.icon;
-        return (
-          <Card key={index} className={`${stat.bgColor} border-0 overflow-hidden relative`}>
-            <CardContent className="p-4">
-              {/* Glow effect when running */}
-              {isAutomationRunning && index < 4 && (
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer" />
-              )}
-              
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg bg-gradient-to-br ${stat.color}`}>
-                  <Icon className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  <p className={`text-lg font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>
-                    {stat.value}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+    <div className="space-y-6">
+      {/* Global Stats Summary */}
+      <div>
+        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Global Overview</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {statCards.map((stat, index) => {
+            const Icon = stat.icon;
+            return (
+              <Card key={index} className="bg-white border-gray-200 overflow-hidden relative hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  {/* Glow effect when running */}
+                  {isAutomationRunning && index < 4 && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-100/50 to-transparent animate-shimmer" />
+                  )}
+                  
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg bg-gradient-to-br ${stat.color}`}>
+                      <Icon className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-gray-600">{stat.label}</p>
+                      <p className={`text-base font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>
+                        {stat.value}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Per-Wallet Stats */}
+      <div>
+        <WalletMiningStats />
+      </div>
     </div>
   );
 }

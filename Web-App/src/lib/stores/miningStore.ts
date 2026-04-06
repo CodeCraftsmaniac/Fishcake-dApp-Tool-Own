@@ -4,15 +4,32 @@ import { persist } from 'zustand/middleware';
 
 export type WorkflowNodeStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
+export interface WorkflowStepData {
+  txHash?: string;
+  timestamp?: number;
+  gasUsed?: string;
+  blockNumber?: number;
+  error?: string;
+}
+
 export interface WorkflowNode {
   id: string;
   type: 'mint_nft' | 'create_event' | 'drop_1' | 'drop_2' | 'validate' | 'check_reward' | 'finish_event';
   label: string;
   status: WorkflowNodeStatus;
-  data?: Record<string, unknown>;
+  data?: WorkflowStepData;
   startedAt?: number;
   completedAt?: number;
   error?: string;
+}
+
+// Wallet-specific workflow state
+export interface WalletWorkflow {
+  walletId: string;
+  walletAddress: string;
+  nodes: WorkflowNode[];
+  currentEventId: string | null;
+  lastUpdated: number;
 }
 
 export interface MiningWallet {
@@ -24,13 +41,23 @@ export interface MiningWallet {
   status: 'active' | 'paused' | 'error' | 'nft_expired';
   nftType: 'NONE' | 'BASIC' | 'PRO';
   nftExpiry: number | null;
+  nftTokenId: number | null;
   failureCount: number;
   lastEventId: string | null;
   nextEventAt: number | null;
+  firstMiningDate: number | null; // Track first mining date
   balances: {
     fcc: string;
     usdt: string;
     pol: string;
+  };
+  // Wallet-specific stats
+  stats: {
+    totalMined: string;
+    miningDays: number;
+    totalEvents: number;
+    ongoingEvents: number;
+    finishedEvents: number;
   };
 }
 
@@ -42,8 +69,16 @@ export interface MiningEvent {
   dropsChecklist: '0/2' | '1/2' | '2/2';
   drop1Completed: boolean;
   drop1TxHash: string | null;
+  drop1Timestamp: number | null;
   drop2Completed: boolean;
   drop2TxHash: string | null;
+  drop2Timestamp: number | null;
+  createEventTxHash: string | null;
+  createEventTimestamp: number | null;
+  finishEventTxHash: string | null;
+  finishEventTimestamp: number | null;
+  mintNftTxHash: string | null;
+  mintNftTimestamp: number | null;
   totalDropped: string | null;
   rewardEligible: boolean;
   rewardReceived: string | null;
@@ -91,6 +126,8 @@ interface MiningStore {
   events: MiningEvent[];
   currentEvent: MiningEvent | null;
   workflowNodes: WorkflowNode[];
+  walletWorkflows: Record<string, WalletWorkflow>; // Wallet-specific workflows
+  selectedWorkflowWalletId: string | null; // Currently viewed wallet workflow
   logs: ExecutionLog[];
   config: MiningConfig;
   stats: MiningStats;
@@ -110,8 +147,12 @@ interface MiningStore {
   updateEvent: (id: string, updates: Partial<MiningEvent>) => void;
   
   // Workflow actions
-  updateNodeStatus: (nodeId: string, status: WorkflowNodeStatus, data?: Record<string, unknown>) => void;
+  updateNodeStatus: (nodeId: string, status: WorkflowNodeStatus, data?: WorkflowStepData) => void;
   resetWorkflow: () => void;
+  selectWorkflowWallet: (walletId: string | null) => void;
+  initWalletWorkflow: (walletId: string) => void;
+  updateWalletWorkflowNode: (walletId: string, nodeId: string, status: WorkflowNodeStatus, data?: WorkflowStepData) => void;
+  getWalletWorkflow: (walletId: string) => WalletWorkflow | null;
   
   // Config actions
   updateConfig: (updates: Partial<MiningConfig>) => void;
@@ -122,9 +163,21 @@ interface MiningStore {
   
   // Stats
   updateStats: (updates: Partial<MiningStats>) => void;
+  updateWalletStats: (walletId: string) => void;
 }
 
 const initialWorkflowNodes: WorkflowNode[] = [
+  { id: 'mint_nft', type: 'mint_nft', label: 'Mint NFT Pass', status: 'pending' },
+  { id: 'create_event', type: 'create_event', label: 'Create Event', status: 'pending' },
+  { id: 'drop_1', type: 'drop_1', label: 'Drop #1 (12 FCC)', status: 'pending' },
+  { id: 'drop_2', type: 'drop_2', label: 'Drop #2 (12 FCC)', status: 'pending' },
+  { id: 'validate', type: 'validate', label: 'Validate (2/2)', status: 'pending' },
+  { id: 'check_reward', type: 'check_reward', label: 'Check Reward (6 FCC)', status: 'pending' },
+  { id: 'finish_event', type: 'finish_event', label: 'Finish Event', status: 'pending' },
+];
+
+// Create fresh workflow nodes for a wallet
+const createWalletWorkflowNodes = (): WorkflowNode[] => [
   { id: 'mint_nft', type: 'mint_nft', label: 'Mint NFT Pass', status: 'pending' },
   { id: 'create_event', type: 'create_event', label: 'Create Event', status: 'pending' },
   { id: 'drop_1', type: 'drop_1', label: 'Drop #1 (12 FCC)', status: 'pending' },
@@ -164,6 +217,8 @@ export const useMiningStore = create<MiningStore>()(
       events: [],
       currentEvent: null,
       workflowNodes: initialWorkflowNodes,
+      walletWorkflows: {},
+      selectedWorkflowWalletId: null,
       logs: [],
       config: initialConfig,
       stats: initialStats,
@@ -190,14 +245,30 @@ export const useMiningStore = create<MiningStore>()(
       // Wallet management
       addWallet: (wallet) => {
         const id = `wallet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const walletWithDefaults = {
+          ...wallet,
+          id,
+          stats: wallet.stats || {
+            totalMined: '0',
+            miningDays: 0,
+            totalEvents: 0,
+            ongoingEvents: 0,
+            finishedEvents: 0,
+          },
+        };
+        
         set((state) => ({
-          wallets: [...state.wallets, { ...wallet, id }],
+          wallets: [...state.wallets, walletWithDefaults],
           stats: {
             ...state.stats,
             totalWallets: state.stats.totalWallets + 1,
             activeWallets: state.stats.activeWallets + (wallet.status === 'active' ? 1 : 0),
           },
         }));
+        
+        // Initialize wallet workflow
+        get().initWalletWorkflow(id);
+        
         get().addLog({
           level: 'success',
           action: 'WALLET_ADD',
@@ -208,8 +279,11 @@ export const useMiningStore = create<MiningStore>()(
       removeWallet: (id) => {
         set((state) => {
           const wallet = state.wallets.find((w) => w.id === id);
+          const { [id]: removed, ...remainingWorkflows } = state.walletWorkflows;
           return {
             wallets: state.wallets.filter((w) => w.id !== id),
+            walletWorkflows: remainingWorkflows,
+            selectedWorkflowWalletId: state.selectedWorkflowWalletId === id ? null : state.selectedWorkflowWalletId,
             stats: {
               ...state.stats,
               totalWallets: state.stats.totalWallets - 1,
@@ -268,8 +342,16 @@ export const useMiningStore = create<MiningStore>()(
           dropsChecklist: '0/2',
           drop1Completed: false,
           drop1TxHash: null,
+          drop1Timestamp: null,
           drop2Completed: false,
           drop2TxHash: null,
+          drop2Timestamp: null,
+          createEventTxHash: null,
+          createEventTimestamp: null,
+          finishEventTxHash: null,
+          finishEventTimestamp: null,
+          mintNftTxHash: null,
+          mintNftTimestamp: null,
           totalDropped: null,
           rewardEligible: false,
           rewardReceived: null,
@@ -281,6 +363,21 @@ export const useMiningStore = create<MiningStore>()(
           events: [...state.events, event],
           currentEvent: event,
         }));
+        
+        // Update wallet workflow
+        const wallet = get().wallets.find(w => w.id === walletId);
+        if (wallet) {
+          set((state) => ({
+            walletWorkflows: {
+              ...state.walletWorkflows,
+              [walletId]: {
+                ...state.walletWorkflows[walletId],
+                currentEventId: id,
+                lastUpdated: Date.now(),
+              },
+            },
+          }));
+        }
       },
 
       updateEvent: (id, updates) => {
@@ -288,6 +385,12 @@ export const useMiningStore = create<MiningStore>()(
           events: state.events.map((e) => (e.id === id ? { ...e, ...updates } : e)),
           currentEvent: state.currentEvent?.id === id ? { ...state.currentEvent, ...updates } : state.currentEvent,
         }));
+        
+        // Also update wallet stats if event status changed
+        const event = get().events.find(e => e.id === id);
+        if (event && updates.status) {
+          get().updateWalletStats(event.walletId);
+        }
       },
 
       // Workflow management
@@ -308,7 +411,62 @@ export const useMiningStore = create<MiningStore>()(
       },
 
       resetWorkflow: () => {
-        set({ workflowNodes: initialWorkflowNodes, currentEvent: null });
+        set({ workflowNodes: createWalletWorkflowNodes(), currentEvent: null });
+      },
+      
+      // Wallet-specific workflow management
+      selectWorkflowWallet: (walletId) => {
+        set({ selectedWorkflowWalletId: walletId });
+      },
+      
+      initWalletWorkflow: (walletId) => {
+        const wallet = get().wallets.find(w => w.id === walletId);
+        if (!wallet) return;
+        
+        set((state) => ({
+          walletWorkflows: {
+            ...state.walletWorkflows,
+            [walletId]: {
+              walletId,
+              walletAddress: wallet.address,
+              nodes: createWalletWorkflowNodes(),
+              currentEventId: null,
+              lastUpdated: Date.now(),
+            },
+          },
+        }));
+      },
+      
+      updateWalletWorkflowNode: (walletId, nodeId, status, data) => {
+        set((state) => {
+          const workflow = state.walletWorkflows[walletId];
+          if (!workflow) return state;
+          
+          return {
+            walletWorkflows: {
+              ...state.walletWorkflows,
+              [walletId]: {
+                ...workflow,
+                lastUpdated: Date.now(),
+                nodes: workflow.nodes.map((node) =>
+                  node.id === nodeId
+                    ? {
+                        ...node,
+                        status,
+                        data: { ...node.data, ...data },
+                        startedAt: status === 'running' ? Date.now() : node.startedAt,
+                        completedAt: ['completed', 'failed'].includes(status) ? Date.now() : node.completedAt,
+                      }
+                    : node
+                ),
+              },
+            },
+          };
+        });
+      },
+      
+      getWalletWorkflow: (walletId) => {
+        return get().walletWorkflows[walletId] || null;
       },
 
       // Config management
@@ -345,11 +503,49 @@ export const useMiningStore = create<MiningStore>()(
           stats: { ...state.stats, ...updates },
         }));
       },
+      
+      // Update wallet-specific stats
+      updateWalletStats: (walletId) => {
+        const state = get();
+        const walletEvents = state.events.filter(e => e.walletId === walletId);
+        
+        const finishedEvents = walletEvents.filter(e => e.status === 'finished').length;
+        const ongoingEvents = walletEvents.filter(e => !['finished', 'failed', 'timeout'].includes(e.status)).length;
+        const totalMined = walletEvents
+          .filter(e => e.rewardReceived)
+          .reduce((sum, e) => sum + parseFloat(e.rewardReceived || '0'), 0);
+        
+        // Calculate mining days (unique days with finished events)
+        const miningDays = new Set(
+          walletEvents
+            .filter(e => e.status === 'finished' && e.finishedAt)
+            .map(e => new Date(e.finishedAt!).toDateString())
+        ).size;
+        
+        set((prevState) => ({
+          wallets: prevState.wallets.map((w) =>
+            w.id === walletId
+              ? {
+                  ...w,
+                  stats: {
+                    totalMined: totalMined.toString(),
+                    miningDays,
+                    totalEvents: walletEvents.length,
+                    ongoingEvents,
+                    finishedEvents,
+                  },
+                }
+              : w
+          ),
+        }));
+      },
     }),
     {
       name: 'fishcake-mining-storage',
       partialize: (state) => ({
         wallets: state.wallets,
+        walletWorkflows: state.walletWorkflows,
+        events: state.events,
         config: state.config,
         stats: state.stats,
       }),

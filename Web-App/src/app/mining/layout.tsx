@@ -1,0 +1,304 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import { useUIStore } from '@/lib/stores';
+import { useMiningStore } from '@/lib/stores/miningStore';
+import { Button, Badge } from '@/components/ui';
+import {
+  LayoutDashboard,
+  Wallet,
+  History,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Cpu,
+  Play,
+  Pause,
+  RefreshCw,
+  BarChart3,
+  ArrowLeft,
+  Moon,
+  Sun,
+  Bell,
+  Fuel,
+} from 'lucide-react';
+
+interface MiningLayoutProps {
+  children: React.ReactNode;
+}
+
+const miningSidebarItems = [
+  { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, href: '/mining/overview' },
+  { id: 'wallets', label: 'Wallet Manager', icon: Wallet, href: '/mining/wallets' },
+  { id: 'workflow', label: 'Workflow Visual', icon: RefreshCw, href: '/mining/workflow' },
+  { id: 'history', label: 'Execution Logs', icon: History, href: '/mining/history' },
+  { id: 'stats', label: 'Mining Stats', icon: BarChart3, href: '/mining/stats' },
+  { id: 'settings', label: 'Configuration', icon: Settings, href: '/mining/settings' },
+];
+
+export default function MiningLayout({ children }: MiningLayoutProps) {
+  const pathname = usePathname();
+  const { sidebarOpen, toggleSidebar, theme, setTheme, gasPrice } = useUIStore();
+  const { 
+    isAutomationRunning, 
+    startAutomation, 
+    stopAutomation, 
+    wallets 
+  } = useMiningStore();
+
+  const currentSection = miningSidebarItems.find(item => pathname.startsWith(item.href));
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Mining-Specific Sidebar */}
+      <aside
+        className={cn(
+          'fixed left-0 top-0 z-40 h-screen border-r border-gray-200 bg-white transition-all duration-200',
+          sidebarOpen ? 'w-64' : 'w-20'
+        )}
+      >
+        <div className="flex h-full flex-col">
+          {/* Logo */}
+          <div className="flex h-16 items-center justify-between px-4 border-b border-gray-200">
+            <div className="flex items-center gap-2.5">
+              <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-purple-600 via-pink-500 to-orange-500 flex-shrink-0">
+                <Cpu className="h-4 w-4 text-white" />
+                {isAutomationRunning && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                  </span>
+                )}
+              </div>
+              {sidebarOpen && (
+                <div>
+                  <span className="text-sm font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 bg-clip-text text-transparent whitespace-nowrap tracking-tight">
+                    Mining
+                  </span>
+                  <span className="block text-[10px] text-gray-600 font-bold uppercase tracking-wider">Automation</span>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={toggleSidebar}
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
+            >
+              {sidebarOpen ? <ChevronLeft size={16} className="text-gray-600" /> : <ChevronRight size={16} className="text-gray-600" />}
+            </button>
+          </div>
+
+          {/* Back to Dashboard */}
+          <div className="px-3 py-2.5 border-b border-gray-200">
+            <Link
+              href="/"
+              className={cn(
+                'flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors',
+                'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              )}
+            >
+              <ArrowLeft className="h-3.5 w-3.5 flex-shrink-0" />
+              {sidebarOpen && <span className="text-xs font-bold">Back to Dashboard</span>}
+            </Link>
+          </div>
+
+          {/* Mining Navigation */}
+          <nav className="flex-1 px-3 py-3 overflow-y-auto">
+            <div className="space-y-1">
+              {miningSidebarItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+
+                return (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg transition-all',
+                      isActive
+                        ? 'bg-gradient-to-r from-purple-50 to-pink-50 text-purple-600 border border-purple-200 shadow-sm'
+                        : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                    )}
+                  >
+                    <Icon className={cn('h-4 w-4 flex-shrink-0', isActive && 'text-purple-600')} />
+                    {sidebarOpen && (
+                      <span className="text-xs font-bold whitespace-nowrap">
+                        {item.label}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Wallet List Preview */}
+            {wallets.length > 0 && sidebarOpen && (
+              <div className="mt-5">
+                <p className="px-2.5 mb-2 text-[10px] font-bold uppercase text-gray-600 tracking-wider">
+                  Wallets ({wallets.length})
+                </p>
+                <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                  {wallets.slice(0, 10).map((wallet) => (
+                    <div
+                      key={wallet.id}
+                      className={cn(
+                        'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[10px]',
+                        'bg-gray-50 hover:bg-gray-100 transition-colors'
+                      )}
+                    >
+                      <div className={cn(
+                        'w-1.5 h-1.5 rounded-full flex-shrink-0',
+                        wallet.status === 'active' ? 'bg-green-500 animate-pulse' :
+                        wallet.status === 'paused' ? 'bg-yellow-500' : 'bg-red-500'
+                      )} />
+                      <span className="font-mono truncate text-gray-700 font-semibold">
+                        {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                      </span>
+                    </div>
+                  ))}
+                  {wallets.length > 10 && (
+                    <p className="px-2.5 text-[10px] text-gray-500">
+                      +{wallets.length - 10} more
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </nav>
+
+          {/* Footer - Stats Summary */}
+          <div className="p-3 border-t border-gray-200">
+            {sidebarOpen ? (
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-gray-600 font-bold">Active Wallets</span>
+                  <span className="font-bold text-green-600">
+                    {wallets.filter(w => w.status === 'active').length}/{wallets.length}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-gray-600 font-bold">Status</span>
+                  <span className={cn(
+                    'font-bold',
+                    isAutomationRunning ? 'text-green-600' : 'text-gray-600'
+                  )}>
+                    {isAutomationRunning ? 'Running' : 'Stopped'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-center">
+                <div className={cn(
+                  'h-2 w-2 rounded-full',
+                  isAutomationRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                )} />
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div
+        className={cn(
+          'transition-all duration-200',
+          sidebarOpen ? 'ml-64' : 'ml-20'
+        )}
+      >
+        {/* Header with Status Controls */}
+        <header className="sticky top-0 z-30 h-14 border-b border-gray-200 bg-white/80 backdrop-blur-xl">
+          <div className="flex h-full items-center justify-between px-5">
+            {/* Left side - Gas + Section Title */}
+            <div className="flex items-center gap-3">
+              {gasPrice !== null && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-100">
+                  <Fuel className="h-3 w-3 text-purple-600" />
+                  <span className="text-xs font-medium text-gray-700">
+                    {gasPrice} Gwei
+                  </span>
+                </div>
+              )}
+              <div className="h-5 w-px bg-gray-200" />
+              <h1 className="text-sm font-bold text-gray-900 tracking-tight">
+                {currentSection?.label || 'Mining Automation'}
+              </h1>
+            </div>
+
+            {/* Right side - Controls */}
+            <div className="flex items-center gap-3">
+              {/* Automation Status Badge */}
+              <Badge 
+                variant={isAutomationRunning ? 'default' : 'secondary'}
+                className={cn(
+                  'px-2.5 py-1 text-[10px]',
+                  isAutomationRunning 
+                    ? 'bg-green-50 text-green-600 border-green-200' 
+                    : 'bg-gray-100 text-gray-600 border-gray-200'
+                )}
+              >
+                <div className={cn(
+                  'w-1.5 h-1.5 rounded-full mr-1.5',
+                  isAutomationRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                )} />
+                {isAutomationRunning ? 'Running' : 'Stopped'}
+              </Badge>
+
+              {/* Start/Stop Button */}
+              <Button
+                onClick={isAutomationRunning ? stopAutomation : startAutomation}
+                size="sm"
+                className={cn(
+                  'min-w-[130px] h-8 text-xs',
+                  isAutomationRunning 
+                    ? 'bg-red-500 hover:bg-red-600 text-white' 
+                    : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white'
+                )}
+              >
+                {isAutomationRunning ? (
+                  <>
+                    <Pause className="w-3 h-3 mr-1.5" />
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3 h-3 mr-1.5" />
+                    Start Automation
+                  </>
+                )}
+              </Button>
+
+              <div className="h-5 w-px bg-gray-200" />
+
+              {/* Theme toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="rounded-full h-8 w-8 hover:bg-gray-100"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="h-4 w-4 text-gray-600" />
+                ) : (
+                  <Moon className="h-4 w-4 text-gray-600" />
+                )}
+              </Button>
+
+              {/* Notifications */}
+              <Button variant="ghost" size="icon" className="rounded-full relative h-8 w-8 hover:bg-gray-100">
+                <Bell className="h-4 w-4 text-gray-600" />
+                <span className="absolute top-1 right-1 h-1.5 w-1.5 bg-orange-500 rounded-full" />
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="p-5">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}

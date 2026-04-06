@@ -72,6 +72,8 @@ export function WalletManager() {
           status: 'active',
           nftType: 'NONE',
           nftExpiry: null,
+          nftTokenId: null,
+          firstMiningDate: null,
           failureCount: 0,
           lastEventId: null,
           nextEventAt: null,
@@ -79,6 +81,13 @@ export function WalletManager() {
             fcc: '0',
             usdt: '0',
             pol: '0',
+          },
+          stats: {
+            totalMined: '0',
+            miningDays: 0,
+            totalEvents: 0,
+            ongoingEvents: 0,
+            finishedEvents: 0,
           },
         });
 

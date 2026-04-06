@@ -380,6 +380,88 @@ router.get('/events', (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/mining/wallets/:address/events
+ * Get events for a specific wallet
+ */
+router.get('/wallets/:address/events', (req: Request, res: Response) => {
+  try {
+    const address = req.params.address as string;
+    const wallet = getWalletByAddress(address);
+    
+    if (!wallet) {
+      return res.status(404).json({
+        success: false,
+        error: 'Wallet not found'
+      });
+    }
+
+    const { getEventsByWallet } = require('./eventProcessor.js');
+    const events = getEventsByWallet(wallet.id);
+    res.json({ success: true, data: events });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
+  }
+});
+
+/**
+ * GET /api/mining/wallets/:address/stats
+ * Get mining stats for a specific wallet
+ */
+router.get('/wallets/:address/stats', (req: Request, res: Response) => {
+  try {
+    const address = req.params.address as string;
+    const wallet = getWalletByAddress(address);
+    
+    if (!wallet) {
+      return res.status(404).json({
+        success: false,
+        error: 'Wallet not found'
+      });
+    }
+
+    const { getEventsByWallet } = require('./eventProcessor.js');
+    const events = getEventsByWallet(wallet.id);
+    
+    // Calculate wallet-specific stats
+    const finishedEvents = events.filter((e: { status: string }) => e.status === 'FINISHED');
+    const ongoingEvents = events.filter((e: { status: string }) => !['FINISHED', 'FAILED', 'TIMEOUT'].includes(e.status));
+    const totalMined = finishedEvents
+      .filter((e: { reward_received: string | null }) => e.reward_received)
+      .reduce((sum: number, e: { reward_received: string }) => sum + parseFloat(e.reward_received || '0'), 0);
+    
+    // Calculate unique mining days
+    const miningDays = new Set(
+      finishedEvents
+        .filter((e: { finished_at: number | null }) => e.finished_at)
+        .map((e: { finished_at: number }) => new Date(e.finished_at * 1000).toDateString())
+    ).size;
+    
+    const stats = {
+      pol: wallet.pol_balance || '0',
+      fcc: wallet.fcc_balance || '0',
+      totalMined: totalMined.toFixed(2),
+      miningDays,
+      totalEvents: events.length,
+      ongoingEvents: ongoingEvents.length,
+      finishedEvents: finishedEvents.length,
+      passExpiry: wallet.nft_expiry_at 
+        ? new Date(wallet.nft_expiry_at * 1000).toISOString()
+        : null,
+    };
+
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
+  }
+});
+
 // ==================== STATS ====================
 
 /**

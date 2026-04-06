@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Quicksand } from 'next/font/google';
 import { Providers } from '@/lib/providers';
 import '@/styles/globals.css';
 
-const inter = Inter({ 
+const quicksand = Quicksand({ 
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-quicksand',
+  weight: ['400', '500', '600', '700'],
 });
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${quicksand.variable} font-sans antialiased`}>
         <Providers>
           {children}
         </Providers>
