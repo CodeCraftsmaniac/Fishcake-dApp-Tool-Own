@@ -194,9 +194,37 @@ function WalletStatsCard({ wallet }: { wallet: MiningWallet }) {
 export function MiningStats() {
   const { wallets } = useMiningStore();
 
-  // If no wallets, show nothing (as per requirement)
+  // Empty state when no wallets
   if (wallets.length === 0) {
-    return null;
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-gray-900 tracking-tight">Mining Stats</h3>
+            <p className="text-xs text-gray-600 font-semibold">
+              Per-wallet mining statistics
+            </p>
+          </div>
+        </div>
+
+        {/* Empty State */}
+        <Card className="bg-white border-gray-200">
+          <CardContent className="p-12 text-center">
+            <div className="flex flex-col items-center gap-4">
+              <div className="p-4 rounded-full bg-gray-100">
+                <Activity className="w-8 h-8 text-gray-400" />
+              </div>
+              <div>
+                <h4 className="text-lg font-bold text-gray-900 mb-1">No Mining Data Yet</h4>
+                <p className="text-sm text-gray-600 max-w-md">
+                  Import wallets in the Wallet Manager to start tracking mining statistics
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
