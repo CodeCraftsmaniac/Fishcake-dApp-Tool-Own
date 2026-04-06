@@ -298,6 +298,9 @@ type StatementOps<T> = {
   updateScheduler?: Statement;
 };
 
+// Initialize database FIRST before creating prepared statements
+initializeDatabase();
+
 // Wallet operations
 export const walletOps: Record<string, Statement> = {
   insert: db.prepare(`
@@ -523,8 +526,5 @@ export const statsOps: Record<string, Statement> = {
       (SELECT ROUND(100.0 * COUNT(CASE WHEN status = 'FINISHED' THEN 1 END) / NULLIF(COUNT(*), 0), 2) FROM mining_events) as success_rate
   `),
 };
-
-// Initialize on import
-initializeDatabase();
 
 export default db;
