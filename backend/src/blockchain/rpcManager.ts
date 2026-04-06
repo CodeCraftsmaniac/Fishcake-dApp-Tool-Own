@@ -29,45 +29,82 @@ export interface RpcHealth {
   totalSuccesses: number;
 }
 
-// All RPC endpoints (prioritized)
-const RPC_ENDPOINTS: RpcEndpoint[] = [
-  {
-    url: "https://polygon-mainnet.g.alchemy.com/v2/LkNoRUIu8n117O626DO9M",
-    name: "Alchemy",
-    priority: 1,
-    isPrivate: true,
-  },
-  {
-    url: "https://lb.drpc.org/ogrpc?network=polygon&dkey=Ai-2uYNWu0OmkBvx0BdHgkDK29YkMEwR8aE0Grar0DFx",
-    name: "dRPC",
-    priority: 2,
-    isPrivate: true,
-  },
-  {
-    url: "https://polygon-bor-rpc.publicnode.com",
-    name: "PublicNode",
-    priority: 3,
-    isPrivate: false,
-  },
-  {
-    url: "https://rpc.ankr.com/polygon",
-    name: "Ankr",
-    priority: 4,
-    isPrivate: false,
-  },
-  {
-    url: "https://polygon.drpc.org",
-    name: "dRPC-Public",
-    priority: 5,
-    isPrivate: false,
-  },
-  {
-    url: "https://rpc-mainnet.maticvigil.com",
-    name: "MaticVigil",
-    priority: 6,
-    isPrivate: false,
-  },
-];
+// Build RPC endpoints from environment variables
+const buildRpcEndpoints = (): RpcEndpoint[] => {
+  const endpoints: RpcEndpoint[] = [];
+  
+  // Add Alchemy if provided
+  if (process.env.RPC_ALCHEMY) {
+    endpoints.push({
+      url: process.env.RPC_ALCHEMY,
+      name: "Alchemy",
+      priority: 1,
+      isPrivate: true,
+    });
+  }
+  
+  // Add dRPC if provided
+  if (process.env.RPC_DRPC) {
+    endpoints.push({
+      url: process.env.RPC_DRPC,
+      name: "dRPC",
+      priority: 2,
+      isPrivate: true,
+    });
+  }
+  
+  // Add public RPCs
+  if (process.env.RPC_PUBLICNODE) {
+    endpoints.push({
+      url: process.env.RPC_PUBLICNODE,
+      name: "PublicNode",
+      priority: 3,
+      isPrivate: false,
+    });
+  }
+  
+  if (process.env.RPC_ANKR) {
+    endpoints.push({
+      url: process.env.RPC_ANKR,
+      name: "Ankr",
+      priority: 4,
+      isPrivate: false,
+    });
+  }
+  
+  if (process.env.RPC_LLAMARPC) {
+    endpoints.push({
+      url: process.env.RPC_LLAMARPC,
+      name: "LlamaRPC",
+      priority: 5,
+      isPrivate: false,
+    });
+  }
+  
+  if (process.env.RPC_BLOCKPI) {
+    endpoints.push({
+      url: process.env.RPC_BLOCKPI,
+      name: "BlockPI",
+      priority: 6,
+      isPrivate: false,
+    });
+  }
+  
+  // Fallback public RPC if no endpoints configured
+  if (endpoints.length === 0) {
+    endpoints.push({
+      url: "https://polygon-bor-rpc.publicnode.com",
+      name: "PublicNode-Fallback",
+      priority: 1,
+      isPrivate: false,
+    });
+  }
+  
+  return endpoints;
+};
+
+// All RPC endpoints (built from environment)
+const RPC_ENDPOINTS: RpcEndpoint[] = buildRpcEndpoints();
 
 // Health tracking for each RPC
 const rpcHealthMap = new Map<string, RpcHealth>();
@@ -78,6 +115,9 @@ const providerCache = new Map<string, JsonRpcProvider>();
 // Current active provider
 let activeProvider: JsonRpcProvider | null = null;
 let activeRpcUrl: string = "";
+
+// Export for external use
+export { RPC_ENDPOINTS };
 
 // Configuration
 const CONFIG = {
