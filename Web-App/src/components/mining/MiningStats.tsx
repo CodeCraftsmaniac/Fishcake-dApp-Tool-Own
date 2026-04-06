@@ -14,6 +14,7 @@ import {
   Droplets
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useState, useEffect } from 'react';
 
 // Format address for display
 const formatAddress = (address: string) => {
@@ -32,9 +33,8 @@ const formatDate = (timestamp: number | null) => {
 };
 
 // Calculate countdown
-const getCountdown = (timestamp: number | null) => {
+const getCountdown = (timestamp: number | null, now: number) => {
   if (!timestamp) return null;
-  const now = Date.now();
   const diff = timestamp - now;
   if (diff <= 0) return 'Expired';
   
@@ -48,6 +48,12 @@ const getCountdown = (timestamp: number | null) => {
 // Individual wallet stats card
 function WalletStatsCard({ wallet }: { wallet: MiningWallet }) {
   const { events } = useMiningStore();
+  const [now, setNow] = useState<number>(0);
+  
+  // Only run on client
+  useEffect(() => {
+    setNow(Date.now());
+  }, []);
   
   // Calculate wallet-specific stats
   const walletEvents = events.filter(e => e.walletId === wallet.id);
@@ -66,8 +72,8 @@ function WalletStatsCard({ wallet }: { wallet: MiningWallet }) {
 
   // Get pass expiry
   const passExpiry = wallet.nftExpiry ? formatDate(wallet.nftExpiry) : 'No Pass';
-  const isPassExpired = wallet.nftExpiry ? wallet.nftExpiry < Date.now() : true;
-  const countdown = getCountdown(wallet.nftExpiry);
+  const isPassExpired = wallet.nftExpiry && now > 0 ? wallet.nftExpiry < now : true;
+  const countdown = now > 0 ? getCountdown(wallet.nftExpiry, now) : null;
 
   const stats = [
     {
