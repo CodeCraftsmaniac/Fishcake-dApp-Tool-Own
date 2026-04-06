@@ -3,8 +3,10 @@
  * Contract addresses and chain config for Polygon Mainnet
  */
 
-// RPC endpoints (prioritized - fastest public RPCs first)
+// RPC endpoints (prioritized - with private RPCs first)
 export const RPC_ENDPOINTS = [
+  'https://polygon-mainnet.g.alchemy.com/v2/LkNoRUIu8n117O626DO9M',
+  'https://lb.drpc.org/ogrpc?network=polygon&dkey=Ai-2uYNWu0OmkBvx0BdHgkDK29YkMEwR8aE0Grar0DFx',
   'https://polygon-bor-rpc.publicnode.com',
   'https://rpc.ankr.com/polygon',
   'https://polygon.drpc.org',
@@ -12,7 +14,7 @@ export const RPC_ENDPOINTS = [
 ] as const;
 
 // Primary RPC
-export const POLYGON_RPC = RPC_ENDPOINTS[0];
+export const POLYGON_RPC = RPC_ENDPOINTS[2]; // Use publicnode as default (most reliable public)
 
 // Chain configuration
 export const POLYGON_CHAIN_ID = 137;

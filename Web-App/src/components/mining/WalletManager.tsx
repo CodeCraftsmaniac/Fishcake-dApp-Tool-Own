@@ -64,6 +64,7 @@ export function WalletManager() {
     return new ethers.JsonRpcProvider('https://polygon-bor-rpc.publicnode.com', {
       name: 'polygon',
       chainId: 137,
+    }, {
       staticNetwork: true
     });
   }, []);

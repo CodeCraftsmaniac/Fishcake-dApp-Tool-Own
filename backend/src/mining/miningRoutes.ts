@@ -14,14 +14,27 @@ import {
   MiningWallet,
   WalletImportResult,
 } from './index.js';
+import { 
+  getSmartProvider, 
+  getAllRpcStatus, 
+  getCurrentRpc,
+  startHealthMonitoring,
+  initializeRpcHealth,
+} from '../blockchain/rpcManager.js';
 
 const router = Router();
 
 // Track connected SSE clients
 const sseClients = new Set<Response>();
 
-// Provider for balance fetching
-const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+// Initialize RPC health monitoring
+initializeRpcHealth();
+startHealthMonitoring();
+
+// Get provider dynamically
+async function getProvider(): Promise<ethers.JsonRpcProvider> {
+  return getSmartProvider();
+}
 
 // Hook up scheduler events to SSE
 miningScheduler.on('log', (log: { level: string; message: string }) => {
@@ -272,7 +285,8 @@ router.post('/wallets/import', async (req: Request, res: Response) => {
       });
     }
 
-    const results = await importWallets(privateKeys, passphrase, provider);
+    const providerInstance = await getProvider();
+    const results = await importWallets(privateKeys, passphrase, providerInstance);
     
     const successCount = results.filter((r: WalletImportResult) => r.success).length;
     const failCount = results.filter((r: WalletImportResult) => !r.success).length;
@@ -528,6 +542,55 @@ router.get('/stream', (req: Request, res: Response) => {
     clearInterval(pingInterval);
     sseClients.delete(res);
   });
+});
+
+// ==================== RPC STATUS ====================
+
+/**
+ * GET /api/mining/rpc/status
+ * Get all RPC endpoints status with latency
+ */
+router.get('/rpc/status', (_req: Request, res: Response) => {
+  try {
+    const status = getAllRpcStatus();
+    const current = getCurrentRpc();
+    
+    res.json({ 
+      success: true, 
+      data: {
+        current: current,
+        endpoints: status.map(s => ({
+          name: s.name,
+          url: s.url.substring(0, 50) + (s.url.length > 50 ? '...' : ''),
+          latency: s.latency,
+          isHealthy: s.isHealthy,
+          successRate: Math.round(s.successRate * 100),
+          lastCheck: s.lastCheck,
+        }))
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
+  }
+});
+
+/**
+ * GET /api/mining/rpc/current
+ * Get current active RPC
+ */
+router.get('/rpc/current', (_req: Request, res: Response) => {
+  try {
+    const current = getCurrentRpc();
+    res.json({ success: true, data: current });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
+  }
 });
 
 export default router;
