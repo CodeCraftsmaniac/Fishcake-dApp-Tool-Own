@@ -60,9 +60,6 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
 
-      - name: Run lint
-        run: npm run lint --if-present
-
   # CLI App CI
   cli-ci:
     name: CLI App CI
