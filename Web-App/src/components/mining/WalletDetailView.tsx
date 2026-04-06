@@ -164,10 +164,9 @@ export function WalletDetailView({ selectedWalletId: propSelectedWalletId, onSel
               {/* Actions */}
               <div className="flex items-center gap-2">
                 <Button
-                  variant="outline"
                   size="sm"
                   onClick={() => handleToggleStatus(selectedWallet)}
-                  className="font-semibold"
+                  className="font-semibold bg-gray-900 text-white hover:bg-gray-800 border-2 border-gray-700 h-9"
                 >
                   {selectedWallet.status === 'active' ? (
                     <>
@@ -182,13 +181,12 @@ export function WalletDetailView({ selectedWalletId: propSelectedWalletId, onSel
                   )}
                 </Button>
                 <Button
-                  variant="outline"
                   size="sm"
                   onClick={() => {
                     onSelectWallet(null);
                     removeWallet(selectedWallet.id);
                   }}
-                  className="text-red-600 hover:text-red-700 border-red-300 font-semibold"
+                  className="bg-red-600 text-white hover:bg-red-700 border-2 border-red-500 font-semibold h-9"
                 >
                   <Trash2 className="w-3 h-3" />
                 </Button>

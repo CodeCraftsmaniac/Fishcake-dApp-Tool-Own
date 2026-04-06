@@ -22,8 +22,8 @@ import { BACKEND_VERSION } from './index.js';
 
 // Environment configuration
 const PORT = process.env.PORT || 3001;
-const NODE_ENV = process.env.NODE_ENV || 'development';
-const FRONTEND_URLS = (process.env.FRONTEND_URLS || 'http://localhost:3000,https://fishcake-dapp.vercel.app').split(',');
+const NODE_ENV = process.env.NODE_ENV || 'production';
+const FRONTEND_URLS = (process.env.FRONTEND_URLS || 'https://fishcake-dapp.vercel.app').split(',');
 
 // Create Express app
 const app = express();
@@ -42,11 +42,6 @@ app.use(cors({
     
     // Check against allowed frontend URLs
     if (FRONTEND_URLS.some(url => origin.startsWith(url.trim()))) {
-      return callback(null, true);
-    }
-    
-    // In development, allow localhost
-    if (NODE_ENV === 'development' && origin.includes('localhost')) {
       return callback(null, true);
     }
     
@@ -158,8 +153,8 @@ async function startServer() {
     // Start Express server
     const server = app.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
-      console.log(`📡 API available at http://localhost:${PORT}/api/mining`);
-      console.log(`❤️  Health check at http://localhost:${PORT}/health`);
+      console.log(`📡 API available at /api/mining`);
+      console.log(`❤️  Health check at /health`);
     });
     
     // Graceful shutdown

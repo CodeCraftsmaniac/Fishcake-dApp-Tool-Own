@@ -1,0 +1,127 @@
+FISHCAKE DAPP - PRODUCTION DEPLOYMENT
+=====================================
+
+ARCHITECTURE:
+-------------
+Frontend: Vercel (Next.js)
+Backend: Railway (Node.js/Express)
+Database: SQLite (Railway persistent storage)
+Blockchain: Polygon Mainnet
+
+LIVE URLS:
+----------
+Frontend: https://fishcake-dapp.vercel.app
+Backend API: https://fishcake-dapp-tool-production.up.railway.app
+Health Check: https://fishcake-dapp-tool-production.up.railway.app/health
+
+DEPLOYMENT STATUS:
+------------------
+✅ Frontend: Auto-deploys from GitHub (main branch)
+✅ Backend: Auto-deploys from GitHub (main branch)
+✅ Database: Persistent storage on Railway
+✅ CORS: Configured for all Vercel URLs
+✅ SSL/HTTPS: Enabled on both frontend and backend
+✅ Environment Variables: Set in Railway dashboard
+
+BACKEND FEATURES:
+-----------------
+✅ Mining automation engine
+✅ Scheduler (cron-based)
+✅ Wallet processing
+✅ Blockchain interaction (4/6 RPC healthy)
+✅ SQLite database with WAL mode
+✅ Multi-RPC failover
+✅ Health monitoring
+✅ Auto-restart on failure
+
+ENVIRONMENT VARIABLES (Railway):
+--------------------------------
+NODE_ENV=production
+PORT=8080 (auto-assigned by Railway)
+FRONTEND_URLS=https://fishcake-dapp.vercel.app,...
+DATABASE_PATH=/app/data/fishcake.db
+MINING_DB_PATH=/app/data/mining.db
+JWT_SECRET=<random-string>
+RPC_PUBLICNODE=https://polygon-bor-rpc.publicnode.com
+RPC_ANKR=https://rpc.ankr.com/polygon
+SCHEDULER_ENABLED=true
+LOG_LEVEL=info
+
+MONITORING:
+-----------
+Backend Health: curl https://fishcake-dapp-tool-production.up.railway.app/health
+RPC Status: curl https://fishcake-dapp-tool-production.up.railway.app/api/mining/rpc/status
+Mining Status: curl https://fishcake-dapp-tool-production.up.railway.app/api/mining/status
+
+DEPLOYMENT PROCESS:
+-------------------
+1. Push to GitHub main branch
+2. Railway auto-detects changes
+3. Builds backend (npm install && npm run build)
+4. Deploys to production
+5. Health check passes
+6. Traffic routed to new deployment
+
+NO LOCAL DEPENDENCIES:
+----------------------
+✅ No localhost references
+✅ No local file paths
+✅ All URLs are production URLs
+✅ Environment variables for all configs
+✅ Cloud-based database storage
+
+COST ESTIMATE:
+--------------
+Railway: ~$11-14/month (512MB RAM, always-on)
+Vercel: Free (Hobby plan)
+Total: ~$11-14/month
+
+BACKUP & RECOVERY:
+------------------
+Database: SQLite files in /app/data/ (Railway persistent storage)
+Code: GitHub repository (main branch)
+Logs: Railway dashboard (last 7 days)
+
+SCALING:
+--------
+Current: 512MB RAM, 1 instance
+Can scale to: 8GB RAM, multiple regions
+Auto-restart: Enabled (max 10 retries)
+
+SECURITY:
+---------
+✅ HTTPS enforced
+✅ CORS restricted to Vercel domains
+✅ Helmet security headers
+✅ JWT authentication ready
+✅ Environment variables for secrets
+✅ No hardcoded credentials
+
+MAINTENANCE:
+------------
+- Monitor Railway dashboard for errors
+- Check health endpoint daily
+- Review RPC status weekly
+- Update dependencies monthly
+- Backup database weekly (if needed)
+
+TROUBLESHOOTING:
+----------------
+If backend is down:
+1. Check Railway dashboard for errors
+2. Check health endpoint
+3. Review deployment logs
+4. Verify environment variables
+5. Check RPC endpoints status
+
+If frontend can't connect:
+1. Verify NEXT_PUBLIC_API_URL is set
+2. Check CORS configuration
+3. Test backend health endpoint
+4. Check browser console for errors
+
+SUPPORT:
+--------
+Railway: https://railway.app/dashboard
+Vercel: https://vercel.com/dashboard
+GitHub: https://github.com/CodeCraftsmaniac/Fishcake-dApp-Tool-Own

@@ -384,10 +384,9 @@ export function WalletManager() {
         <div className="flex gap-2">
           {wallets.length > 0 && (
             <Button 
-              variant="outline" 
               size="sm"
               onClick={handleRefreshAllBalances}
-              className="h-8 text-xs"
+              className="h-8 text-xs bg-gray-900 text-white hover:bg-gray-800 border-2 border-gray-700 font-bold"
             >
               <RefreshCw className="w-3.5 h-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Refresh All</span>
@@ -423,10 +422,9 @@ export function WalletManager() {
                   className="hidden"
                 />
                 <Button 
-                  variant="outline" 
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
-                  className="h-7 text-xs bg-white"
+                  className="h-7 text-xs bg-gray-900 text-white hover:bg-gray-800 border-2 border-gray-700 font-bold"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
                   Import CSV
@@ -521,12 +519,11 @@ export function WalletManager() {
                 )}
               </Button>
               <Button 
-                variant="outline" 
                 onClick={() => {
                   setShowImport(false);
                   setImportStatuses([]);
                 }}
-                className="h-9 text-sm"
+                className="h-9 text-sm bg-gray-900 text-white hover:bg-gray-800 border-2 border-gray-700 font-bold"
                 disabled={isImporting}
               >
                 Cancel
@@ -537,7 +534,7 @@ export function WalletManager() {
       )}
 
       {/* Wallets Table */}
-      {wallets.length === 0 ? (
+      {wallets.length === 0 && !showImport ? (
         <Card className="bg-white border-gray-200">
           <CardContent className="p-10 text-center">
             <Wallet className="w-12 h-12 mx-auto text-gray-400 mb-4" />
@@ -547,15 +544,14 @@ export function WalletManager() {
             </p>
             <Button 
               onClick={() => setShowImport(true)}
-              variant="outline"
-              className="gap-2"
+              className="gap-2 bg-gray-900 text-white hover:bg-gray-800 border-2 border-gray-700 h-10 px-6 font-bold"
             >
               <Plus className="w-4 h-4" />
               Import Your First Wallet
             </Button>
           </CardContent>
         </Card>
-      ) : (
+      ) : wallets.length > 0 ? (
         <Card className="bg-white border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -670,7 +666,7 @@ export function WalletManager() {
             </table>
           </div>
         </Card>
-      )}
+      ) : null}
     </div>
   );
 }

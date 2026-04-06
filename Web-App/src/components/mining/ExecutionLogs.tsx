@@ -89,15 +89,16 @@ export function ExecutionLogs() {
               ))}
             </div>
 
-            <Button variant="outline" size="sm" onClick={handleExport} className="border-gray-200 hover:bg-gray-50 font-bold text-xs">
+            <Button 
+              onClick={handleExport} 
+              className="bg-gray-900 text-white hover:bg-gray-800 border-2 border-gray-700 font-bold text-xs h-9 px-4"
+            >
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
             <Button 
-              variant="outline" 
-              size="sm" 
               onClick={clearLogs}
-              className="text-red-600 hover:text-red-700 border-gray-200 hover:bg-red-50 font-bold text-xs"
+              className="bg-red-600 text-white hover:bg-red-700 border-2 border-red-500 font-bold text-xs h-9 px-4"
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Clear

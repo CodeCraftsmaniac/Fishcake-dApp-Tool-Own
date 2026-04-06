@@ -1,11 +1,11 @@
 /**
  * Fishcake Backend API Client
  * 
- * Connects the Web-App (Vercel) to the Backend Server (VM)
+ * Connects the Web-App (Vercel) to the Backend Server (Railway)
  */
 
-// API Base URL - uses environment variable or defaults to localhost for development
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// API Base URL - MUST be set via environment variable in production
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://fishcake-dapp-tool-production.up.railway.app';
 
 interface ApiResponse<T> {
   success: boolean;

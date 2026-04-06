@@ -121,9 +121,14 @@ export default function MiningSettingsPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-800 flex items-center gap-2">
-                    <Coins className="w-4 h-4 text-orange-600" />
-                    FCC Amount per Recipient
+                  <label className="text-xs font-bold text-gray-800 flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Coins className="w-4 h-4 text-orange-600" />
+                      FCC Amount per Recipient
+                    </span>
+                    <span className="text-xs text-orange-600 font-bold">
+                      (Total: {totalPerEvent} FCC per event)
+                    </span>
                   </label>
                   <div className="relative">
                     <Input
@@ -136,18 +141,17 @@ export default function MiningSettingsPage() {
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">FCC</span>
                   </div>
-                  <div className="flex items-center gap-2 mt-2 p-3 rounded-lg bg-orange-50 border border-orange-200">
-                    <ArrowRight className="w-3 h-3 text-orange-600" />
-                    <p className="text-xs text-orange-800 font-bold">
-                      Total: <span className="text-orange-600">{totalPerEvent} FCC</span> per event
-                    </p>
-                  </div>
                 </div>
                 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-800 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-purple-600" />
-                    Cycle Offset
+                  <label className="text-xs font-bold text-gray-800 flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-purple-600" />
+                      Cycle Offset
+                    </span>
+                    <span className="text-xs text-purple-600 font-bold">
+                      (Delay before next cycle)
+                    </span>
                   </label>
                   <div className="relative">
                     <Input
@@ -161,16 +165,39 @@ export default function MiningSettingsPage() {
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">minutes</span>
                   </div>
-                  <div className="flex items-center gap-2 mt-2 p-3 rounded-lg bg-purple-50 border border-purple-200">
-                    <Info className="w-3 h-3 text-purple-600" />
-                    <p className="text-xs text-purple-800 font-bold">
-                      Delay before next cycle
-                    </p>
-                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          {/* Action Buttons - Under Left Column */}
+          <div className="flex gap-3">
+            <Button 
+              onClick={handleReset} 
+              className="px-6 h-11 text-sm font-bold bg-gray-900 text-white hover:bg-gray-800 border-2 border-gray-700"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Reset to Defaults
+            </Button>
+            
+            <Button 
+              onClick={handleSave} 
+              disabled={isSaving}
+              className="flex-1 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 h-11 text-sm text-white font-bold shadow-lg shadow-purple-200 hover:shadow-xl transition-all"
+            >
+              {isSaving ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Saving Changes...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Configuration
+                </>
+              )}
+            </Button>
+          </div>
 
         </div>
 
@@ -191,7 +218,7 @@ export default function MiningSettingsPage() {
                 </div>
                 
                 <div className="space-y-3">
-                  <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200">
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 text-center">
                     <p className="text-xs text-gray-600 font-bold mb-1">Total Drop Amount</p>
                     <p className="text-2xl font-bold text-gray-900">{totalPerEvent} <span className="text-sm text-gray-600">FCC</span></p>
                   </div>
@@ -204,7 +231,7 @@ export default function MiningSettingsPage() {
                     </div>
                   </div>
                   
-                  <div className="p-4 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 border-2 border-green-400 shadow-lg">
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 border-2 border-green-400 shadow-lg text-center">
                     <p className="text-xs text-green-100 font-bold mb-1">Mining Reward</p>
                     <p className="text-2xl font-bold text-white">+{rewardPerEvent.toFixed(2)} <span className="text-sm text-green-100">FCC</span></p>
                   </div>
@@ -251,36 +278,6 @@ export default function MiningSettingsPage() {
           </Card>
 
         </div>
-      </div>
-
-      {/* Action Buttons - Bottom Right */}
-      <div className="flex justify-end gap-3 pt-2">
-        <Button 
-          onClick={handleReset} 
-          variant="outline"
-          className="px-6 h-11 text-sm border-2 border-gray-200 hover:bg-gray-50 font-bold transition-all"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Reset to Defaults
-        </Button>
-        
-        <Button 
-          onClick={handleSave} 
-          disabled={isSaving}
-          className="px-8 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 h-11 text-sm text-white font-bold shadow-lg shadow-purple-200 hover:shadow-xl transition-all"
-        >
-          {isSaving ? (
-            <>
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              Saving Changes...
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4 mr-2" />
-              Save Configuration
-            </>
-          )}
-        </Button>
       </div>
     </div>
   );
