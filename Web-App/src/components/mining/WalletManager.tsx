@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useMiningStore, MiningWallet } from '@/lib/stores/miningStore';
 import { Card, CardContent, Button, Input, Badge } from '@/components/ui';
 import { 
@@ -14,17 +14,102 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  Sparkles
+  Sparkles,
+  FileSpreadsheet,
+  Loader2,
+  Download,
+  Eye,
+  EyeOff,
+  Copy,
+  Check
 } from 'lucide-react';
 import { ethers } from 'ethers';
+import { cn } from '@/lib/utils';
+
+// Contract addresses
+const CONTRACTS = {
+  FCC_TOKEN: '0x84eBc138F4Ab844A3050a6059763D269dC9951c6',
+  USDT_TOKEN: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+  NFT_MANAGER: '0x2F2Cb24BaB1b6E2353EF6246a2Ea4ce50487008B',
+};
+
+const ERC20_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+];
+
+const NFT_ABI = [
+  'function getMerchantNFT(address) view returns (uint256 tokenId, uint8 nftType, uint256 mintedAt, uint256 expiredAt, bool isValid)',
+];
+
+interface ImportStatus {
+  address: string;
+  step: 'validating' | 'fetching_balances' | 'fetching_nft' | 'completed' | 'failed';
+  message: string;
+  error?: string;
+}
 
 export function WalletManager() {
   const { wallets, addWallet, removeWallet, updateWallet, addLog } = useMiningStore();
   const [showImport, setShowImport] = useState(false);
   const [privateKeysInput, setPrivateKeysInput] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [importStatuses, setImportStatuses] = useState<ImportStatus[]>([]);
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Get provider
+  const getProvider = useCallback(() => {
+    return new ethers.JsonRpcProvider('https://polygon-rpc.com');
+  }, []);
+
+  // Fetch balances for a wallet
+  const fetchBalances = async (address: string, provider: ethers.JsonRpcProvider) => {
+    const fcc = new ethers.Contract(CONTRACTS.FCC_TOKEN, ERC20_ABI, provider);
+    const usdt = new ethers.Contract(CONTRACTS.USDT_TOKEN, ERC20_ABI, provider);
+
+    const [fccBalance, usdtBalance, polBalance] = await Promise.all([
+      fcc.balanceOf(address),
+      usdt.balanceOf(address),
+      provider.getBalance(address),
+    ]);
+
+    return {
+      fcc: ethers.formatUnits(fccBalance, 6),
+      usdt: ethers.formatUnits(usdtBalance, 6),
+      pol: ethers.formatEther(polBalance),
+    };
+  };
+
+  // Fetch NFT info for a wallet
+  const fetchNftInfo = async (address: string, provider: ethers.JsonRpcProvider) => {
+    try {
+      const nftManager = new ethers.Contract(CONTRACTS.NFT_MANAGER, NFT_ABI, provider);
+      const nftInfo = await nftManager.getMerchantNFT(address);
+      
+      const nftType = nftInfo.nftType === 1 ? 'PRO' : nftInfo.nftType === 2 ? 'BASIC' : 'NONE';
+      const isValid = nftInfo.isValid;
+      const expiry = Number(nftInfo.expiredAt) * 1000; // Convert to ms
+
+      return {
+        nftType: isValid ? nftType : 'NONE',
+        nftExpiry: isValid ? expiry : null,
+        nftTokenId: isValid ? Number(nftInfo.tokenId) : null,
+      };
+    } catch {
+      return { nftType: 'NONE' as const, nftExpiry: null, nftTokenId: null };
+    }
+  };
+
+  // Update import status
+  const updateImportStatus = (address: string, status: Partial<ImportStatus>) => {
+    setImportStatuses(prev => 
+      prev.map(s => s.address === address ? { ...s, ...status } : s)
+    );
+  };
+
+  // Handle import
   const handleImport = async () => {
     if (!privateKeysInput.trim() || !password) {
       addLog({
@@ -43,45 +128,81 @@ export function WalletManager() {
       .map(k => k.trim())
       .filter(k => k.length > 0);
 
+    // Initialize import statuses
+    const initialStatuses: ImportStatus[] = [];
+    const provider = getProvider();
+
     for (const key of keys) {
       try {
-        // Validate and derive address
+        const cleanKey = key.startsWith('0x') ? key : `0x${key}`;
+        const tempWallet = new ethers.Wallet(cleanKey);
+        initialStatuses.push({
+          address: tempWallet.address,
+          step: 'validating',
+          message: 'Validating private key...',
+        });
+      } catch {
+        initialStatuses.push({
+          address: key.slice(0, 10) + '...',
+          step: 'failed',
+          message: 'Invalid private key format',
+          error: 'Invalid key',
+        });
+      }
+    }
+    setImportStatuses(initialStatuses);
+
+    // Process each key
+    for (const key of keys) {
+      try {
         const cleanKey = key.startsWith('0x') ? key : `0x${key}`;
         const wallet = new ethers.Wallet(cleanKey);
         
         // Check if already exists
         if (wallets.some(w => w.address.toLowerCase() === wallet.address.toLowerCase())) {
-          addLog({
-            level: 'warn',
-            action: 'WALLET_IMPORT',
-            message: `Wallet ${wallet.address.slice(0, 8)}... already exists`,
+          updateImportStatus(wallet.address, {
+            step: 'failed',
+            message: 'Wallet already exists',
+            error: 'Duplicate wallet',
           });
           continue;
         }
 
-        // TODO: Encrypt with AES-256-GCM using password
-        // For now, store encrypted placeholder
+        // Fetch balances
+        updateImportStatus(wallet.address, {
+          step: 'fetching_balances',
+          message: 'Fetching balances...',
+        });
+
+        const balances = await fetchBalances(wallet.address, provider);
+
+        // Fetch NFT info
+        updateImportStatus(wallet.address, {
+          step: 'fetching_nft',
+          message: 'Fetching NFT pass info...',
+        });
+
+        const nftInfo = await fetchNftInfo(wallet.address, provider);
+
+        // Encrypt key (using base64 for now - TODO: proper AES-256-GCM)
         const salt = crypto.randomUUID();
         const iv = crypto.randomUUID();
 
+        // Add wallet to store
         addWallet({
           address: wallet.address,
-          encryptedKey: btoa(cleanKey), // TODO: Replace with proper encryption
+          encryptedKey: btoa(cleanKey),
           salt,
           iv,
           status: 'active',
-          nftType: 'NONE',
-          nftExpiry: null,
-          nftTokenId: null,
+          nftType: nftInfo.nftType as 'NONE' | 'BASIC' | 'PRO',
+          nftExpiry: nftInfo.nftExpiry,
+          nftTokenId: nftInfo.nftTokenId,
           firstMiningDate: null,
           failureCount: 0,
           lastEventId: null,
           nextEventAt: null,
-          balances: {
-            fcc: '0',
-            usdt: '0',
-            pol: '0',
-          },
+          balances,
           stats: {
             totalMined: '0',
             miningDays: 0,
@@ -91,26 +212,111 @@ export function WalletManager() {
           },
         });
 
+        updateImportStatus(wallet.address, {
+          step: 'completed',
+          message: 'Import complete!',
+        });
+
         addLog({
           level: 'success',
           action: 'WALLET_IMPORT',
           message: `Wallet ${wallet.address.slice(0, 8)}...${wallet.address.slice(-4)} imported successfully`,
         });
+
+        // Small delay between imports
+        await new Promise(r => setTimeout(r, 500));
+
       } catch (error) {
         addLog({
           level: 'error',
           action: 'WALLET_IMPORT',
-          message: `Invalid private key: ${key.slice(0, 10)}...`,
+          message: `Failed to import: ${(error as Error).message}`,
         });
       }
     }
 
     setIsImporting(false);
-    setPrivateKeysInput('');
-    setPassword('');
-    setShowImport(false);
+    
+    // Clear form after 2 seconds if all completed
+    setTimeout(() => {
+      const allComplete = importStatuses.every(s => s.step === 'completed' || s.step === 'failed');
+      if (allComplete) {
+        setPrivateKeysInput('');
+        setPassword('');
+        setImportStatuses([]);
+        setShowImport(false);
+      }
+    }, 2000);
   };
 
+  // Handle CSV import
+  const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const text = await file.text();
+    const lines = text.split(/[\r\n]+/).filter(l => l.trim());
+    
+    // Extract private keys from CSV (assuming column header might be "privateKey" or first column)
+    const keys: string[] = [];
+    for (const line of lines) {
+      const cells = line.split(',').map(c => c.trim().replace(/"/g, ''));
+      for (const cell of cells) {
+        if (/^(0x)?[a-fA-F0-9]{64}$/.test(cell)) {
+          keys.push(cell);
+        }
+      }
+    }
+
+    if (keys.length > 0) {
+      setPrivateKeysInput(keys.join('\n'));
+      addLog({
+        level: 'info',
+        action: 'CSV_IMPORT',
+        message: `Found ${keys.length} private keys in CSV`,
+      });
+    } else {
+      addLog({
+        level: 'error',
+        action: 'CSV_IMPORT',
+        message: 'No valid private keys found in CSV file',
+      });
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Refresh all balances
+  const handleRefreshAllBalances = async () => {
+    const provider = getProvider();
+    
+    for (const wallet of wallets) {
+      try {
+        const balances = await fetchBalances(wallet.address, provider);
+        const nftInfo = await fetchNftInfo(wallet.address, provider);
+        
+        updateWallet(wallet.id, {
+          balances,
+          nftType: nftInfo.nftType as 'NONE' | 'BASIC' | 'PRO',
+          nftExpiry: nftInfo.nftExpiry,
+          nftTokenId: nftInfo.nftTokenId,
+        });
+      } catch (error) {
+        console.error(`Failed to refresh ${wallet.address}:`, error);
+      }
+    }
+
+    addLog({
+      level: 'success',
+      action: 'BALANCE_REFRESH',
+      message: `Refreshed balances for ${wallets.length} wallets`,
+    });
+  };
+
+  // Handle toggle status
   const handleToggleStatus = (wallet: MiningWallet) => {
     const newStatus = wallet.status === 'active' ? 'paused' : 'active';
     updateWallet(wallet.id, { status: newStatus });
@@ -122,102 +328,201 @@ export function WalletManager() {
     });
   };
 
-  const handleRefreshBalances = async (wallet: MiningWallet) => {
-    addLog({
-      level: 'info',
-      action: 'BALANCE_REFRESH',
-      message: `Refreshing balances for ${wallet.address.slice(0, 8)}...`,
-      walletId: wallet.id,
+  // Copy address
+  const copyAddress = (address: string) => {
+    navigator.clipboard.writeText(address);
+    setCopiedAddress(address);
+    setTimeout(() => setCopiedAddress(null), 2000);
+  };
+
+  // Format expiry
+  const formatExpiry = (timestamp: number | null) => {
+    if (!timestamp) return 'N/A';
+    return new Date(timestamp).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
     });
-    // TODO: Fetch actual balances from blockchain
+  };
+
+  // Calculate countdown
+  const getCountdown = (timestamp: number | null) => {
+    if (!timestamp) return null;
+    const now = Date.now();
+    const diff = timestamp - now;
+    if (diff <= 0) return 'Expired';
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    if (days > 0) return `${days}d ${hours}h`;
+    return `${hours}h`;
   };
 
   const statusConfig = {
-    active: { color: 'bg-green-500', label: 'Active', icon: CheckCircle2 },
-    paused: { color: 'bg-yellow-500', label: 'Paused', icon: Pause },
-    error: { color: 'bg-red-500', label: 'Error', icon: AlertCircle },
-    nft_expired: { color: 'bg-orange-500', label: 'NFT Expired', icon: Clock },
-  };
-
-  const nftBadgeConfig = {
-    NONE: { variant: 'secondary' as const, label: 'No NFT' },
-    BASIC: { variant: 'basic' as const, label: 'BASIC' },
-    PRO: { variant: 'pro' as const, label: 'PRO' },
+    active: { color: 'bg-green-500', textColor: 'text-green-600', label: 'Active', icon: CheckCircle2 },
+    paused: { color: 'bg-yellow-500', textColor: 'text-yellow-600', label: 'Paused', icon: Pause },
+    error: { color: 'bg-red-500', textColor: 'text-red-600', label: 'Error', icon: AlertCircle },
+    nft_expired: { color: 'bg-orange-500', textColor: 'text-orange-600', label: 'NFT Expired', icon: Clock },
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      {/* Header - Responsive */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold">Mining Wallets</h3>
-          <p className="text-sm text-muted-foreground">
-            Manage wallets for automated mining
+          <h3 className="text-base font-bold text-gray-900 tracking-tight">Mining Wallets</h3>
+          <p className="text-xs text-gray-600 font-semibold">
+            {wallets.length} wallet{wallets.length !== 1 ? 's' : ''} configured
           </p>
         </div>
-        <Button 
-          onClick={() => setShowImport(!showImport)}
-          className="bg-gradient-to-r from-fishcake-500 to-purple-500"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Import Wallets
-        </Button>
+        <div className="flex gap-2">
+          {wallets.length > 0 && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleRefreshAllBalances}
+              className="h-8 text-xs"
+            >
+              <RefreshCw className="w-3.5 h-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Refresh All</span>
+            </Button>
+          )}
+          <Button 
+            onClick={() => setShowImport(!showImport)}
+            size="sm"
+            className="h-8 text-xs bg-gradient-to-r from-fishcake-500 to-purple-500 hover:from-fishcake-600 hover:to-purple-600"
+          >
+            <Plus className="w-3.5 h-3.5 sm:mr-1.5" />
+            <span className="hidden sm:inline">Import Wallets</span>
+            <span className="sm:hidden">Import</span>
+          </Button>
+        </div>
       </div>
 
       {/* Import Form */}
       {showImport && (
-        <Card className="border-fishcake-500/30">
-          <CardContent className="p-6 space-y-4">
-            <h4 className="font-medium flex items-center gap-2">
-              <Upload className="w-4 h-4 text-fishcake-400" />
-              Import Private Keys
-            </h4>
+        <Card className="border-fishcake-500/30 bg-gradient-to-br from-fishcake-50/50 to-purple-50/50">
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-sm flex items-center gap-2 text-gray-900">
+                <Upload className="w-4 h-4 text-fishcake-500" />
+                Import Private Keys
+              </h4>
+              <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.txt"
+                  onChange={handleCSVImport}
+                  className="hidden"
+                />
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-7 text-xs"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
+                  Import CSV
+                </Button>
+              </div>
+            </div>
             
             <div>
-              <label className="text-sm font-medium mb-2 block">
-                Private Keys (one per line or comma-separated)
+              <label className="text-xs font-bold text-gray-700 mb-1.5 block uppercase tracking-wider">
+                Private Keys (one per line)
               </label>
               <textarea
                 value={privateKeysInput}
                 onChange={(e) => setPrivateKeysInput(e.target.value)}
-                className="w-full h-32 px-3 py-2 rounded-lg bg-background border border-border font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-fishcake-500"
-                placeholder="Enter private keys here..."
+                className="w-full h-28 px-3 py-2 rounded-lg bg-white border border-gray-200 font-mono text-xs resize-none focus:outline-none focus:ring-2 focus:ring-fishcake-500 focus:border-transparent"
+                placeholder="0x... (enter private keys, one per line)"
+                disabled={isImporting}
               />
             </div>
 
             <div>
-              <label className="text-sm font-medium mb-2 block">
+              <label className="text-xs font-bold text-gray-700 mb-1.5 block uppercase tracking-wider">
                 Encryption Password
               </label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password to encrypt keys"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password to encrypt keys"
+                  className="pr-10 text-sm h-9"
+                  disabled={isImporting}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1 font-medium">
                 Keys are encrypted with AES-256-GCM before storage
               </p>
             </div>
 
+            {/* Import Status */}
+            {importStatuses.length > 0 && (
+              <div className="space-y-2 p-3 bg-white rounded-lg border border-gray-200">
+                <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">Import Progress</p>
+                {importStatuses.map((status, idx) => (
+                  <div key={idx} className="flex items-center gap-3 text-xs">
+                    {status.step === 'completed' ? (
+                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    ) : status.step === 'failed' ? (
+                      <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                    ) : (
+                      <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" />
+                    )}
+                    <span className="font-mono truncate flex-1 text-gray-700">
+                      {status.address.slice(0, 10)}...{status.address.slice(-6)}
+                    </span>
+                    <span className={cn(
+                      'font-medium',
+                      status.step === 'completed' ? 'text-green-600' :
+                      status.step === 'failed' ? 'text-red-600' :
+                      'text-blue-600'
+                    )}>
+                      {status.message}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button 
                 onClick={handleImport} 
-                disabled={isImporting}
-                className="flex-1"
+                disabled={isImporting || !privateKeysInput.trim() || !password}
+                className="flex-1 h-9 text-sm"
               >
                 {isImporting ? (
                   <>
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Importing...
                   </>
                 ) : (
-                  'Import Wallets'
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Import Wallets
+                  </>
                 )}
               </Button>
               <Button 
                 variant="outline" 
-                onClick={() => setShowImport(false)}
+                onClick={() => {
+                  setShowImport(false);
+                  setImportStatuses([]);
+                }}
+                className="h-9 text-sm"
+                disabled={isImporting}
               >
                 Cancel
               </Button>
@@ -226,105 +531,140 @@ export function WalletManager() {
         </Card>
       )}
 
-      {/* Wallets List */}
+      {/* Wallets Table */}
       {wallets.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <Wallet className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-            <h4 className="font-medium mb-2">No Wallets Added</h4>
-            <p className="text-sm text-muted-foreground mb-4">
+        <Card className="bg-white border-gray-200">
+          <CardContent className="p-10 text-center">
+            <Wallet className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+            <h4 className="font-bold text-gray-900 mb-2">No Wallets Added</h4>
+            <p className="text-sm text-gray-600 mb-4">
               Import wallets to start automated mining
             </p>
             <Button 
               onClick={() => setShowImport(true)}
               variant="outline"
+              className="gap-2"
             >
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="w-4 h-4" />
               Import Your First Wallet
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {wallets.map((wallet) => {
-            const status = statusConfig[wallet.status];
-            const StatusIcon = status.icon;
-            const nftBadge = nftBadgeConfig[wallet.nftType];
+        <Card className="bg-white border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Wallet</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">POL</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">USDT</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">FCC</th>
+                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Pass</th>
+                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Expiry</th>
+                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Countdown</th>
+                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {wallets.map((wallet, index) => {
+                  const status = statusConfig[wallet.status];
+                  const countdown = getCountdown(wallet.nftExpiry);
+                  const isExpired = wallet.nftExpiry && wallet.nftExpiry < Date.now();
 
-            return (
-              <Card key={wallet.id} className="hover:border-fishcake-500/30 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      {/* Status Indicator */}
-                      <div className={`w-3 h-3 rounded-full ${status.color}`} />
-                      
-                      {/* Address */}
-                      <div>
+                  return (
+                    <tr 
+                      key={wallet.id} 
+                      className={cn(
+                        'hover:bg-gray-50 transition-colors',
+                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
+                      )}
+                    >
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm">
-                            {wallet.address.slice(0, 10)}...{wallet.address.slice(-8)}
+                          <div className={cn('w-2 h-2 rounded-full', status.color)} />
+                          <span className="font-mono text-xs text-gray-900">
+                            {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
                           </span>
-                          <Badge variant={nftBadge.variant}>
-                            <Sparkles className="w-3 h-3 mr-1" />
-                            {nftBadge.label}
-                          </Badge>
+                          <button
+                            onClick={() => copyAddress(wallet.address)}
+                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                          >
+                            {copiedAddress === wallet.address ? (
+                              <Check className="w-3 h-3 text-green-500" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
                         </div>
-                        <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                          <span>FCC: {parseFloat(wallet.balances.fcc).toFixed(2)}</span>
-                          <span>USDT: {parseFloat(wallet.balances.usdt).toFixed(2)}</span>
-                          <span>POL: {parseFloat(wallet.balances.pol).toFixed(4)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRefreshBalances(wallet)}
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleStatus(wallet)}
-                      >
-                        {wallet.status === 'active' ? (
-                          <Pause className="w-4 h-4" />
-                        ) : (
-                          <Play className="w-4 h-4" />
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-xs text-gray-700">
+                        {parseFloat(wallet.balances.pol).toFixed(4)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-xs text-gray-700">
+                        {parseFloat(wallet.balances.usdt).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-xs text-fishcake-600 font-bold">
+                        {parseFloat(wallet.balances.fcc).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge variant={
+                          wallet.nftType === 'PRO' ? 'pro' :
+                          wallet.nftType === 'BASIC' ? 'basic' : 'secondary'
+                        } className="text-[10px]">
+                          {wallet.nftType === 'NONE' ? 'None' : wallet.nftType}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs text-gray-600">
+                        {formatExpiry(wallet.nftExpiry)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {countdown && (
+                          <span className={cn(
+                            'text-xs font-bold',
+                            isExpired ? 'text-red-600' : 'text-green-600'
+                          )}>
+                            {countdown}
+                          </span>
                         )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeWallet(wallet.id)}
-                        className="text-red-400 hover:text-red-300"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Next Event Info */}
-                  {wallet.nextEventAt && (
-                    <div className="mt-3 pt-3 border-t border-border">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Clock className="w-3 h-3" />
-                        <span>
-                          Next event: {new Date(wallet.nextEventAt).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={cn('text-xs font-bold capitalize', status.textColor)}>
+                          {status.label}
                         </span>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleStatus(wallet)}
+                            className="h-7 w-7 p-0"
+                          >
+                            {wallet.status === 'active' ? (
+                              <Pause className="w-3.5 h-3.5 text-yellow-600" />
+                            ) : (
+                              <Play className="w-3.5 h-3.5 text-green-600" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeWallet(wallet.id)}
+                            className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </div>
   );

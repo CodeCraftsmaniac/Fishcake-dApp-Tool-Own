@@ -1,7 +1,7 @@
 'use client';
 
-import { WalletDetailView } from '@/components/mining';
+import { WalletManager } from '@/components/mining';
 
 export default function MiningWalletsPage() {
-  return <WalletDetailView />;
+  return <WalletManager />;
 }

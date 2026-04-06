@@ -89,28 +89,28 @@ export function MiningStats() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Global Stats Summary */}
       <div>
         <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Global Overview</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
           {statCards.map((stat, index) => {
             const Icon = stat.icon;
             return (
               <Card key={index} className="bg-white border-gray-200 overflow-hidden relative hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   {/* Glow effect when running */}
                   {isAutomationRunning && index < 4 && (
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-100/50 to-transparent animate-shimmer" />
                   )}
                   
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg bg-gradient-to-br ${stat.color}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                    <div className={`p-2 rounded-lg bg-gradient-to-br ${stat.color} w-fit`}>
                       <Icon className="w-4 h-4 text-white" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-gray-600">{stat.label}</p>
-                      <p className={`text-base font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>
+                      <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-600">{stat.label}</p>
+                      <p className={`text-sm sm:text-base font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>
                         {stat.value}
                       </p>
                     </div>

@@ -111,32 +111,32 @@ function WalletStatCard({ wallet, isSelected, onSelect }: WalletStatCardProps) {
 
   return (
     <div 
-      className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
+      className={`p-3 sm:p-4 rounded-xl border-2 transition-all cursor-pointer ${
         isSelected 
           ? 'border-fishcake-500 bg-fishcake-50/50' 
           : 'border-gray-200 bg-white hover:border-gray-300'
       }`}
       onClick={() => onSelect(wallet.id)}
     >
-      {/* Wallet Header */}
-      <div className="flex items-center justify-between mb-4">
+      {/* Wallet Header - Responsive */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0 mb-3 sm:mb-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${
             wallet.status === 'active' ? 'bg-green-100' :
             wallet.status === 'paused' ? 'bg-yellow-100' :
             'bg-red-100'
           }`}>
-            <Wallet className={`w-5 h-5 ${
+            <Wallet className={`w-4 sm:w-5 h-4 sm:h-5 ${
               wallet.status === 'active' ? 'text-green-600' :
               wallet.status === 'paused' ? 'text-yellow-600' :
               'text-red-600'
             }`} />
           </div>
           <div>
-            <h4 className="text-sm font-bold text-gray-900 font-mono">
+            <h4 className="text-xs sm:text-sm font-bold text-gray-900 font-mono">
               {formatAddress(wallet.address)}
             </h4>
-            <p className={`text-xs font-semibold capitalize ${
+            <p className={`text-[10px] sm:text-xs font-semibold capitalize ${
               wallet.status === 'active' ? 'text-green-600' :
               wallet.status === 'paused' ? 'text-yellow-600' :
               'text-red-600'
@@ -147,7 +147,7 @@ function WalletStatCard({ wallet, isSelected, onSelect }: WalletStatCardProps) {
         </div>
         
         {/* NFT Badge */}
-        <div className={`px-2 py-1 rounded-full text-xs font-bold ${
+        <div className={`px-2 py-1 rounded-full text-[10px] sm:text-xs font-bold w-fit ${
           wallet.nftType === 'PRO' ? 'bg-gradient-to-r from-fishcake-500 to-orange-500 text-white' :
           wallet.nftType === 'BASIC' ? 'bg-blue-100 text-blue-700' :
           'bg-gray-100 text-gray-500'
@@ -156,19 +156,19 @@ function WalletStatCard({ wallet, isSelected, onSelect }: WalletStatCardProps) {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+      {/* Stats Grid - More responsive */}
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 sm:gap-2">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           return (
-            <div key={index} className={`p-2 rounded-lg ${stat.bgColor}`}>
-              <div className="flex items-center gap-1 mb-1">
-                <Icon className={`w-3 h-3 bg-gradient-to-r ${stat.color} bg-clip-text`} style={{ color: 'transparent' }} />
+            <div key={index} className={`p-1.5 sm:p-2 rounded-lg ${stat.bgColor}`}>
+              <div className="flex items-center gap-1 mb-0.5 sm:mb-1">
+                <Icon className={`w-2.5 sm:w-3 h-2.5 sm:h-3 bg-gradient-to-r ${stat.color} bg-clip-text`} style={{ color: 'transparent' }} />
               </div>
-              <p className={`text-sm font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>
+              <p className={`text-xs sm:text-sm font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent truncate`}>
                 {stat.value}
               </p>
-              <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider">
+              <p className="text-[8px] sm:text-[10px] font-semibold text-gray-600 uppercase tracking-wider truncate">
                 {stat.label}
               </p>
             </div>

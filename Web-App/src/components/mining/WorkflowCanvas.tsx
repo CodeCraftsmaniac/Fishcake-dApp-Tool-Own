@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useMiningStore, WorkflowNode, WorkflowNodeStatus, WalletWorkflow, MiningEvent } from '@/lib/stores/miningStore';
+import { useMiningStore, WorkflowNode, WorkflowNodeStatus, MiningEvent, MiningWallet } from '@/lib/stores/miningStore';
 import { Card, CardContent } from '@/components/ui';
 import {
   Sparkles, 
@@ -16,8 +16,9 @@ import {
   ArrowRight,
   ExternalLink,
   Wallet,
-  ChevronDown
+  AlertCircle
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const nodeIcons: Record<string, React.ElementType> = {
   mint_nft: Sparkles,
@@ -50,14 +51,15 @@ interface NodePosition {
   y: number;
 }
 
+// Compact positions for stacked view
 const nodePositions: Record<string, NodePosition> = {
-  mint_nft: { x: 100, y: 80 },
-  create_event: { x: 300, y: 80 },
-  drop_1: { x: 500, y: 40 },
-  drop_2: { x: 500, y: 120 },
-  validate: { x: 700, y: 80 },
-  check_reward: { x: 900, y: 80 },
-  finish_event: { x: 1100, y: 80 },
+  mint_nft: { x: 60, y: 50 },
+  create_event: { x: 180, y: 50 },
+  drop_1: { x: 300, y: 25 },
+  drop_2: { x: 300, y: 75 },
+  validate: { x: 420, y: 50 },
+  check_reward: { x: 540, y: 50 },
+  finish_event: { x: 660, y: 50 },
 };
 
 const connections = [
@@ -88,36 +90,93 @@ const getPolygonScanLink = (txHash: string) => {
   return `https://polygonscan.com/tx/${txHash}`;
 };
 
-interface WorkflowCanvasProps {
-  walletId?: string;
+// Main WorkflowCanvas - Shows ALL wallets stacked
+export function WorkflowCanvas() {
+  const { wallets, isAutomationRunning } = useMiningStore();
+
+  // No wallets - show empty state
+  if (wallets.length === 0) {
+    return (
+      <Card className="bg-white border-gray-200">
+        <CardContent className="p-8">
+          <div className="text-center">
+            <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <h3 className="text-lg font-bold text-gray-900 mb-2">No Wallets Imported</h3>
+            <p className="text-sm text-gray-600">
+              Import wallets in the Wallet Manager to view their workflows
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <h2 className="text-base font-bold text-gray-900 tracking-tight">Visual Workflows</h2>
+          <p className="text-xs text-gray-600 font-semibold">
+            Each wallet has its own independent automation workflow
+          </p>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 w-fit">
+          <div className={cn(
+            'w-2 h-2 rounded-full',
+            isAutomationRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+          )} />
+          <span className="text-xs font-bold text-gray-700">
+            {isAutomationRunning ? 'Running' : 'Stopped'}
+          </span>
+        </div>
+      </div>
+
+      {/* Stacked Workflows for each wallet */}
+      {wallets.map((wallet, index) => (
+        <SingleWalletWorkflow 
+          key={wallet.id} 
+          wallet={wallet}
+          index={index}
+        />
+      ))}
+
+      {/* Legend - Responsive */}
+      <div className="flex flex-wrap items-center gap-3 sm:gap-6 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <span className="text-xs font-bold text-gray-600 uppercase w-full sm:w-auto">Legend:</span>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-gray-400" />
+          <span className="text-xs text-gray-700">Pending</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
+          <span className="text-xs text-gray-700">Running</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-green-500" />
+          <span className="text-xs text-gray-700">Completed</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-red-500" />
+          <span className="text-xs text-gray-700">Failed</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-export function WorkflowCanvas({ walletId }: WorkflowCanvasProps) {
-  const { 
-    wallets, 
-    walletWorkflows, 
-    workflowNodes, 
-    isAutomationRunning, 
-    currentEvent,
-    events,
-    selectedWorkflowWalletId,
-    selectWorkflowWallet 
-  } = useMiningStore();
-  
+// Individual wallet workflow component
+function SingleWalletWorkflow({ wallet, index }: { wallet: MiningWallet; index: number }) {
+  const { walletWorkflows, workflowNodes, events } = useMiningStore();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const [showWalletDropdown, setShowWalletDropdown] = useState(false);
 
-  // Use provided walletId or selected wallet
-  const activeWalletId = walletId || selectedWorkflowWalletId;
-  const activeWallet = wallets.find(w => w.id === activeWalletId);
-  
-  // Get wallet-specific workflow or fallback to shared
-  const workflow = activeWalletId ? walletWorkflows[activeWalletId] : null;
+  // Get wallet-specific workflow or use default nodes
+  const workflow = walletWorkflows[wallet.id];
   const displayNodes = workflow?.nodes || workflowNodes;
-  
+
   // Get latest event for this wallet
-  const walletEvents = events.filter(e => e.walletId === activeWalletId);
+  const walletEvents = events.filter(e => e.walletId === wallet.id);
   const latestEvent = walletEvents.length > 0 
     ? walletEvents.sort((a, b) => b.startedAt - a.startedAt)[0] 
     : null;
@@ -126,7 +185,7 @@ export function WorkflowCanvas({ walletId }: WorkflowCanvasProps) {
     const handleResize = () => {
       if (canvasRef.current) {
         const width = canvasRef.current.clientWidth;
-        const canvasWidth = 1250;
+        const canvasWidth = 750;
         setScale(Math.min(1, width / canvasWidth));
       }
     };
@@ -136,145 +195,79 @@ export function WorkflowCanvas({ walletId }: WorkflowCanvasProps) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = () => setShowWalletDropdown(false);
-    if (showWalletDropdown) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
-    }
-  }, [showWalletDropdown]);
-
   return (
-    <Card className="overflow-hidden bg-white border-gray-200">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-base font-bold text-gray-900 tracking-tight">Visual Workflow</h3>
-            <p className="text-xs text-gray-700 font-semibold">
-              Real-time automation execution status
-            </p>
+    <Card className="overflow-hidden bg-white border-gray-200 hover:border-gray-300 transition-colors">
+      <CardContent className="p-3 sm:p-4">
+        {/* Wallet Header with Address on Right - Responsive */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0 mb-3">
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+              wallet.status === 'active' ? 'bg-green-100' :
+              wallet.status === 'paused' ? 'bg-yellow-100' :
+              'bg-red-100'
+            )}>
+              <Wallet className={cn(
+                'w-4 h-4',
+                wallet.status === 'active' ? 'text-green-600' :
+                wallet.status === 'paused' ? 'text-yellow-600' :
+                'text-red-600'
+              )} />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase text-gray-500 tracking-wider">
+                Wallet #{index + 1}
+              </p>
+              <p className={cn(
+                'text-xs font-semibold capitalize',
+                wallet.status === 'active' ? 'text-green-600' :
+                wallet.status === 'paused' ? 'text-yellow-600' :
+                'text-red-600'
+              )}>
+                {wallet.status}
+              </p>
+            </div>
           </div>
-          
-          <div className="flex items-center gap-4">
-            {/* Current Event Info */}
+
+          {/* Wallet Address on Right */}
+          <div className="flex items-center gap-2 sm:gap-3 ml-11 sm:ml-0">
             {latestEvent && (
-              <div className="text-xs font-semibold">
-                <span className="text-gray-700">Event: </span>
-                <span className="font-mono text-orange-600 font-bold">
-                  #{latestEvent.chainEventId || 'Creating...'}
-                </span>
-              </div>
+              <span className="text-xs text-gray-500 hidden sm:inline">
+                Event #{latestEvent.chainEventId || '...'}
+              </span>
             )}
-            
-            {/* Wallet Selector */}
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowWalletDropdown(!showWalletDropdown);
-                }}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-fishcake-500/10 to-orange-500/10 border border-fishcake-500/30 hover:border-fishcake-500/50 transition-colors"
-              >
-                <Wallet className="w-4 h-4 text-fishcake-600" />
-                <span className="text-sm font-bold text-gray-900">
-                  {activeWallet ? formatAddress(activeWallet.address) : 'Select Wallet'}
-                </span>
-                <ChevronDown className="w-4 h-4 text-gray-500" />
-              </button>
-              
-              {/* Dropdown */}
-              {showWalletDropdown && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden">
-                  <div className="p-2 border-b border-gray-100">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Select Wallet</p>
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {wallets.length === 0 ? (
-                      <p className="p-3 text-sm text-gray-500">No wallets imported</p>
-                    ) : (
-                      wallets.map((wallet) => (
-                        <button
-                          key={wallet.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            selectWorkflowWallet(wallet.id);
-                            setShowWalletDropdown(false);
-                          }}
-                          className={`w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors ${
-                            wallet.id === activeWalletId ? 'bg-fishcake-50 border-l-2 border-fishcake-500' : ''
-                          }`}
-                        >
-                          <div className={`w-2 h-2 rounded-full ${
-                            wallet.status === 'active' ? 'bg-green-500' :
-                            wallet.status === 'paused' ? 'bg-yellow-500' :
-                            'bg-red-500'
-                          }`} />
-                          <div className="flex-1 text-left">
-                            <p className="text-sm font-mono font-bold text-gray-900">
-                              {formatAddress(wallet.address)}
-                            </p>
-                            <p className="text-xs text-gray-500 capitalize">{wallet.status}</p>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
+            <div className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-gradient-to-r from-fishcake-500/10 to-orange-500/10 border border-fishcake-500/20">
+              <span className="text-xs sm:text-sm font-mono font-bold text-gray-900">
+                {formatAddress(wallet.address)}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Canvas */}
+        {/* Canvas - Horizontally scrollable on mobile */}
         <div 
           ref={canvasRef}
-          className="relative overflow-x-auto bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-gray-200 p-8"
-          style={{ minHeight: '280px' }}
+          className="relative overflow-x-auto bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200 p-2 sm:p-4"
+          style={{ minHeight: '140px' }}
         >
           {/* Grid Background */}
-          <div className="absolute inset-0 opacity-20">
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000008_1px,transparent_1px),linear-gradient(to_bottom,#00000008_1px,transparent_1px)] bg-[size:20px_20px]" />
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000008_1px,transparent_1px),linear-gradient(to_bottom,#00000008_1px,transparent_1px)] bg-[size:16px_16px]" />
           </div>
-
-          {/* No wallet selected message */}
-          {!activeWalletId && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-20">
-              <div className="text-center">
-                <Wallet className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600 font-bold">Select a wallet to view workflow</p>
-                <p className="text-sm text-gray-500">Each wallet has its own independent workflow</p>
-              </div>
-            </div>
-          )}
 
           {/* SVG Connections */}
           <svg 
             className="absolute inset-0 pointer-events-none"
             style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
-            width="1250"
-            height="260"
+            width="750"
+            height="120"
           >
             <defs>
-              {/* Gradient for active connections */}
-              <linearGradient id="activeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <linearGradient id={`activeGradient-${wallet.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="#f97316" />
                 <stop offset="50%" stopColor="#ec4899" />
                 <stop offset="100%" stopColor="#8b5cf6" />
               </linearGradient>
-              
-              {/* Animated dash for running */}
-              <pattern id="flowingDash" patternUnits="userSpaceOnUse" width="20" height="4">
-                <rect width="10" height="4" fill="url(#activeGradient)">
-                  <animate 
-                    attributeName="x" 
-                    from="-20" 
-                    to="0" 
-                    dur="0.5s" 
-                    repeatCount="indefinite" 
-                  />
-                </rect>
-              </pattern>
             </defs>
 
             {connections.map((conn, idx) => {
@@ -286,28 +279,18 @@ export function WorkflowCanvas({ walletId }: WorkflowCanvasProps) {
               const isActive = fromNode?.status === 'completed' || toNode?.status === 'running';
               const isRunning = toNode?.status === 'running';
 
-              // Calculate control points for curved line
-              const midX = (fromPos.x + toPos.x) / 2 + 50;
+              const midX = (fromPos.x + toPos.x) / 2 + 30;
               const midY = (fromPos.y + toPos.y) / 2;
 
               return (
                 <g key={idx}>
-                  {/* Shadow */}
                   <path
-                    d={`M ${fromPos.x + 50} ${fromPos.y + 30} Q ${midX} ${midY} ${toPos.x} ${toPos.y + 30}`}
+                    d={`M ${fromPos.x + 35} ${fromPos.y + 20} Q ${midX} ${midY} ${toPos.x} ${toPos.y + 20}`}
                     fill="none"
-                    stroke="rgba(0,0,0,0.3)"
-                    strokeWidth="4"
+                    stroke={isRunning ? `url(#activeGradient-${wallet.id})` : isActive ? '#f97316' : '#9ca3af'}
+                    strokeWidth="2"
                     strokeLinecap="round"
-                  />
-                  {/* Main line */}
-                  <path
-                    d={`M ${fromPos.x + 50} ${fromPos.y + 30} Q ${midX} ${midY} ${toPos.x} ${toPos.y + 30}`}
-                    fill="none"
-                    stroke={isRunning ? 'url(#flowingDash)' : isActive ? 'url(#activeGradient)' : '#4b5563'}
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeDasharray={isRunning ? '10 10' : 'none'}
+                    strokeDasharray={isRunning ? '6 4' : 'none'}
                   >
                     {isRunning && (
                       <animate 
@@ -319,12 +302,11 @@ export function WorkflowCanvas({ walletId }: WorkflowCanvasProps) {
                       />
                     )}
                   </path>
-                  {/* Arrow head */}
                   <circle
                     cx={toPos.x}
-                    cy={toPos.y + 30}
-                    r="4"
-                    fill={isActive ? '#f97316' : '#4b5563'}
+                    cy={toPos.y + 20}
+                    r="3"
+                    fill={isActive ? '#f97316' : '#9ca3af'}
                   />
                 </g>
               );
@@ -337,8 +319,8 @@ export function WorkflowCanvas({ walletId }: WorkflowCanvasProps) {
             style={{ 
               transform: `scale(${scale})`, 
               transformOrigin: 'top left',
-              width: '1200px',
-              height: '240px'
+              width: '720px',
+              height: '110px'
             }}
           >
             {displayNodes.map((node) => (
@@ -352,39 +334,18 @@ export function WorkflowCanvas({ walletId }: WorkflowCanvasProps) {
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center justify-between mt-6">
-          <div className="flex items-center gap-6 text-xs font-bold">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-gray-400" />
-              <span className="text-gray-700">Pending</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-gray-700">Running</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="text-gray-700">Completed</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500" />
-              <span className="text-gray-700">Failed</span>
-            </div>
-          </div>
-          
-          {/* Last updated */}
-          {workflow?.lastUpdated && (
-            <p className="text-xs text-gray-500">
-              Last updated: {formatTimestamp(workflow.lastUpdated)}
-            </p>
-          )}
-        </div>
+        {/* Last Updated */}
+        {workflow?.lastUpdated && (
+          <p className="text-[10px] text-gray-500 mt-2 text-right">
+            Last updated: {formatTimestamp(workflow.lastUpdated)}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
 }
 
+// Node component
 function WorkflowNodeComponent({ 
   node, 
   position,
@@ -429,7 +390,6 @@ function WorkflowNodeComponent({
           timestamp: latestEvent.finishEventTimestamp,
         };
       default:
-        // For validate and check_reward, use node data
         return {
           txHash: node.data?.txHash,
           timestamp: node.data?.timestamp,
@@ -440,9 +400,20 @@ function WorkflowNodeComponent({
   const txData = getTxData();
   const hasTxData = txData?.txHash || txData?.timestamp;
 
+  // Compact node labels
+  const compactLabels: Record<string, string> = {
+    mint_nft: 'Mint',
+    create_event: 'Create',
+    drop_1: 'Drop 1',
+    drop_2: 'Drop 2',
+    validate: 'Validate',
+    check_reward: 'Reward',
+    finish_event: 'Finish',
+  };
+
   return (
     <div
-      className={`absolute flex flex-col items-center transition-all duration-300`}
+      className="absolute flex flex-col items-center transition-all duration-300"
       style={{ 
         left: position.x,
         top: position.y,
@@ -453,67 +424,60 @@ function WorkflowNodeComponent({
     >
       {/* Node Box */}
       <div
-        className={`relative w-[100px] h-[60px] rounded-xl bg-gradient-to-br ${nodeColors[node.status]} border-2 flex items-center justify-center transition-all duration-300 ${
-          node.status === 'running' ? 'shadow-lg shadow-blue-500/30' : ''
-        } cursor-pointer`}
+        className={cn(
+          'relative w-[70px] h-[40px] rounded-lg bg-gradient-to-br border-2 flex items-center justify-center transition-all duration-300 cursor-pointer',
+          nodeColors[node.status],
+          node.status === 'running' && 'shadow-md shadow-blue-500/30'
+        )}
       >
-        {/* Glow effect for running */}
         {node.status === 'running' && (
-          <div className="absolute inset-0 rounded-xl bg-blue-500/20 animate-ping" />
+          <div className="absolute inset-0 rounded-lg bg-blue-500/20 animate-ping" />
         )}
         
-        {/* Icon */}
-        <div className="relative z-10 flex flex-col items-center gap-1">
-          <Icon className={`w-6 h-6 ${
-            node.status === 'running' ? 'text-blue-400 animate-spin' :
-            node.status === 'completed' ? 'text-green-400' :
-            node.status === 'failed' ? 'text-red-400' :
+        <Icon className={cn(
+          'w-4 h-4',
+          node.status === 'running' ? 'text-blue-500 animate-spin' :
+          node.status === 'completed' ? 'text-green-500' :
+          node.status === 'failed' ? 'text-red-500' :
+          'text-gray-400'
+        )} />
+
+        <div className="absolute -top-1 -right-1">
+          <StatusIcon className={cn(
+            'w-3 h-3',
+            node.status === 'running' ? 'text-blue-500 animate-spin' :
+            node.status === 'completed' ? 'text-green-500' :
+            node.status === 'failed' ? 'text-red-500' :
             'text-gray-400'
-          }`} />
+          )} />
         </div>
 
-        {/* Status indicator */}
-        <div className="absolute -top-1 -right-1">
-          <StatusIcon className={`w-4 h-4 ${
-            node.status === 'running' ? 'text-blue-400 animate-spin' :
-            node.status === 'completed' ? 'text-green-400' :
-            node.status === 'failed' ? 'text-red-400' :
-            'text-gray-500'
-          }`} />
-        </div>
-        
-        {/* Transaction indicator */}
         {hasTxData && (
           <div className="absolute -bottom-1 -right-1">
-            <ExternalLink className="w-3 h-3 text-fishcake-500" />
+            <ExternalLink className="w-2.5 h-2.5 text-fishcake-500" />
           </div>
         )}
       </div>
 
       {/* Label */}
-      <span className={`mt-2 text-xs font-bold text-center max-w-[120px] ${
+      <span className={cn(
+        'mt-1 text-[10px] font-bold text-center',
         node.status === 'running' ? 'text-blue-700' :
         node.status === 'completed' ? 'text-green-700' :
         node.status === 'failed' ? 'text-red-700' :
-        'text-gray-700'
-      }`}>
-        {node.label}
+        'text-gray-600'
+      )}>
+        {compactLabels[node.type] || node.label}
       </span>
 
-      {/* Duration or timestamp */}
-      {node.completedAt && node.startedAt && (
-        <span className="text-[10px] text-gray-700 font-bold">
-          {((node.completedAt - node.startedAt) / 1000).toFixed(1)}s
-        </span>
-      )}
-
-      {/* Tooltip with transaction details */}
+      {/* Tooltip */}
       {showTooltip && hasTxData && (
-        <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 z-50 bg-gray-900 text-white rounded-lg shadow-xl p-3 min-w-[280px]">
+        <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 z-50 bg-gray-900 text-white rounded-lg shadow-xl p-3 min-w-[240px]">
           <div className="text-xs space-y-2">
+            <p className="font-bold text-fishcake-400">{node.label}</p>
             {txData?.txHash && (
               <div>
-                <p className="text-gray-400 font-bold mb-1">Transaction:</p>
+                <p className="text-gray-400 text-[10px] mb-0.5">Transaction:</p>
                 <a 
                   href={getPolygonScanLink(txData.txHash)}
                   target="_blank"
@@ -521,32 +485,25 @@ function WorkflowNodeComponent({
                   className="flex items-center gap-1 text-fishcake-400 hover:text-fishcake-300 transition-colors"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <span className="font-mono">{formatAddress(txData.txHash)}</span>
-                  <ExternalLink className="w-3 h-3" />
+                  <span className="font-mono text-[10px]">{formatAddress(txData.txHash)}</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
                 </a>
               </div>
             )}
             {txData?.timestamp && (
               <div>
-                <p className="text-gray-400 font-bold mb-1">Date:</p>
-                <p className="font-mono">{formatTimestamp(txData.timestamp)}</p>
-              </div>
-            )}
-            {node.data?.gasUsed && (
-              <div>
-                <p className="text-gray-400 font-bold mb-1">Gas Used:</p>
-                <p className="font-mono">{node.data.gasUsed}</p>
+                <p className="text-gray-400 text-[10px] mb-0.5">Date:</p>
+                <p className="font-mono text-[10px]">{formatTimestamp(txData.timestamp)}</p>
               </div>
             )}
             {node.error && (
               <div>
-                <p className="text-red-400 font-bold mb-1">Error:</p>
-                <p className="text-red-300">{node.error}</p>
+                <p className="text-red-400 text-[10px] mb-0.5">Error:</p>
+                <p className="text-red-300 text-[10px]">{node.error}</p>
               </div>
             )}
           </div>
-          {/* Arrow */}
-          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-gray-900" />
+          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-gray-900" />
         </div>
       )}
     </div>

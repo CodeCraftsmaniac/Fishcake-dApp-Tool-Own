@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,8 @@ import {
   Sun,
   Bell,
   Fuel,
+  Menu,
+  X,
 } from 'lucide-react';
 
 interface MiningLayoutProps {
@@ -49,15 +51,48 @@ export default function MiningLayout({ children }: MiningLayoutProps) {
     wallets 
   } = useMiningStore();
 
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Detect mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+      if (window.innerWidth >= 768) {
+        setMobileMenuOpen(false);
+      }
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Close mobile menu on navigation
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   const currentSection = miningSidebarItems.find(item => pathname.startsWith(item.href));
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mining-Specific Sidebar */}
+      {/* Mobile Menu Overlay */}
+      {isMobile && mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Desktop + Mobile Drawer */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-40 h-screen border-r border-gray-200 bg-white transition-all duration-200',
-          sidebarOpen ? 'w-64' : 'w-20'
+          'fixed left-0 top-0 z-50 h-screen border-r border-gray-200 bg-white transition-all duration-300',
+          // Desktop
+          !isMobile && (sidebarOpen ? 'w-64' : 'w-20'),
+          // Mobile
+          isMobile && (mobileMenuOpen ? 'w-72 translate-x-0' : 'w-72 -translate-x-full')
         )}
       >
         <div className="flex h-full flex-col">
@@ -203,46 +238,64 @@ export default function MiningLayout({ children }: MiningLayoutProps) {
       {/* Main Content Area */}
       <div
         className={cn(
-          'transition-all duration-200',
-          sidebarOpen ? 'ml-64' : 'ml-20'
+          'transition-all duration-300 min-h-screen',
+          // Desktop
+          !isMobile && (sidebarOpen ? 'ml-64' : 'ml-20'),
+          // Mobile - no margin, full width
+          isMobile && 'ml-0'
         )}
       >
         {/* Header with Status Controls */}
         <header className="sticky top-0 z-30 h-14 border-b border-gray-200 bg-white/80 backdrop-blur-xl">
-          <div className="flex h-full items-center justify-between px-5">
-            {/* Left side - Gas + Section Title */}
-            <div className="flex items-center gap-3">
+          <div className="flex h-full items-center justify-between px-3 sm:px-5">
+            {/* Left side - Mobile Menu + Gas + Section Title */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Mobile menu toggle */}
+              {isMobile && (
+                <button
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="p-2 -ml-1 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  {mobileMenuOpen ? (
+                    <X className="h-5 w-5 text-gray-600" />
+                  ) : (
+                    <Menu className="h-5 w-5 text-gray-600" />
+                  )}
+                </button>
+              )}
               {gasPrice !== null && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-100">
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-100">
                   <Fuel className="h-3 w-3 text-purple-600" />
                   <span className="text-xs font-medium text-gray-700">
                     {gasPrice} Gwei
                   </span>
                 </div>
               )}
-              <div className="h-5 w-px bg-gray-200" />
-              <h1 className="text-sm font-bold text-gray-900 tracking-tight">
+              <div className="hidden sm:block h-5 w-px bg-gray-200" />
+              <h1 className="text-sm font-bold text-gray-900 tracking-tight truncate max-w-[150px] sm:max-w-none">
                 {currentSection?.label || 'Mining Automation'}
               </h1>
             </div>
 
             {/* Right side - Controls */}
-            <div className="flex items-center gap-3">
-              {/* Automation Status Badge */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Automation Status Badge - Hidden on very small */}
               <Badge 
                 variant={isAutomationRunning ? 'default' : 'secondary'}
                 className={cn(
-                  'px-2.5 py-1 text-[10px]',
+                  'px-2 sm:px-2.5 py-1 text-[10px]',
                   isAutomationRunning 
                     ? 'bg-green-50 text-green-600 border-green-200' 
                     : 'bg-gray-100 text-gray-600 border-gray-200'
                 )}
               >
                 <div className={cn(
-                  'w-1.5 h-1.5 rounded-full mr-1.5',
+                  'w-1.5 h-1.5 rounded-full mr-1 sm:mr-1.5',
                   isAutomationRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
                 )} />
-                {isAutomationRunning ? 'Running' : 'Stopped'}
+                <span className="hidden xs:inline">
+                  {isAutomationRunning ? 'Running' : 'Stopped'}
+                </span>
               </Badge>
 
               {/* Start/Stop Button */}
@@ -250,7 +303,7 @@ export default function MiningLayout({ children }: MiningLayoutProps) {
                 onClick={isAutomationRunning ? stopAutomation : startAutomation}
                 size="sm"
                 className={cn(
-                  'min-w-[130px] h-8 text-xs',
+                  'min-w-[90px] sm:min-w-[130px] h-8 text-xs',
                   isAutomationRunning 
                     ? 'bg-red-500 hover:bg-red-600 text-white' 
                     : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white'
@@ -258,25 +311,25 @@ export default function MiningLayout({ children }: MiningLayoutProps) {
               >
                 {isAutomationRunning ? (
                   <>
-                    <Pause className="w-3 h-3 mr-1.5" />
+                    <Pause className="w-3 h-3 mr-1 sm:mr-1.5" />
                     Stop
                   </>
                 ) : (
                   <>
-                    <Play className="w-3 h-3 mr-1.5" />
-                    Start Automation
+                    <Play className="w-3 h-3 mr-1 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Start </span>Automation
                   </>
                 )}
               </Button>
 
-              <div className="h-5 w-px bg-gray-200" />
+              <div className="hidden sm:block h-5 w-px bg-gray-200" />
 
               {/* Theme toggle */}
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="rounded-full h-8 w-8 hover:bg-gray-100"
+                className="hidden sm:flex rounded-full h-8 w-8 hover:bg-gray-100"
               >
                 {theme === 'dark' ? (
                   <Sun className="h-4 w-4 text-gray-600" />
@@ -286,7 +339,7 @@ export default function MiningLayout({ children }: MiningLayoutProps) {
               </Button>
 
               {/* Notifications */}
-              <Button variant="ghost" size="icon" className="rounded-full relative h-8 w-8 hover:bg-gray-100">
+              <Button variant="ghost" size="icon" className="hidden sm:flex rounded-full relative h-8 w-8 hover:bg-gray-100">
                 <Bell className="h-4 w-4 text-gray-600" />
                 <span className="absolute top-1 right-1 h-1.5 w-1.5 bg-orange-500 rounded-full" />
               </Button>
@@ -295,7 +348,7 @@ export default function MiningLayout({ children }: MiningLayoutProps) {
         </header>
 
         {/* Page Content */}
-        <main className="p-5">
+        <main className="p-3 sm:p-5">
           {children}
         </main>
       </div>
