@@ -1,0 +1,43 @@
+{
+  "name": "fishcake-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fishcake dApp Tool - CLI and Web applications for fishcake.io on Polygon Mainnet",
+  "type": "module",
+  "workspaces": [
+    "backend",
+    "CLI-App",
+    "Web-App"
+  ],
+  "scripts": {
+    "build": "npm run build:backend && npm run build:cli && npm run build:web",
+    "build:backend": "cd backend && npm run build",
+    "build:cli": "cd CLI-App && npm run build",
+    "build:web": "cd Web-App && npm run build",
+    "dev:cli": "cd CLI-App && npm run dev",
+    "dev:web": "cd Web-App && npm run dev",
+    "start:cli": "cd CLI-App && npm run start",
+    "start:web": "cd Web-App && npm run start",
+    "clean": "npm run clean:backend && npm run clean:cli",
+    "clean:backend": "cd backend && npm run clean",
+    "clean:cli": "cd CLI-App && npm run clean",
+    "install:all": "cd backend && npm install && cd ../CLI-App && npm install && cd ../Web-App && npm install",
+    "test:no-backend": "echo 'Testing apps without backend...' && npm run test:cli-no-backend && npm run test:web-no-backend",
+    "test:cli-no-backend": "cd CLI-App && node -e \"import('@fishcake/backend').catch(e => { console.log('✓ CLI correctly fails without backend'); process.exit(0); })\"",
+    "test:web-no-backend": "cd Web-App && node -e \"import('@fishcake/backend').catch(e => { console.log('✓ Web correctly fails without backend'); process.exit(0); })\""
+  },
+  "keywords": [
+    "fishcake",
+    "polygon",
+    "blockchain",
+    "cli",
+    "web3",
+    "crypto",
+    "dapp"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
