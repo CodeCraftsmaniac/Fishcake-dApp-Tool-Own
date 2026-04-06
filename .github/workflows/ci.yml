@@ -1,0 +1,127 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Backend CI
+  backend-ci:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript compile check
+        run: npm run build
+
+      - name: Run lint (if exists)
+        run: npm run lint --if-present
+
+  # Web-App CI
+  webapp-ci:
+    name: Web-App CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Web-App
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Web-App/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript compile check
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
+      - name: Run lint
+        run: npm run lint --if-present
+
+  # CLI App CI
+  cli-ci:
+    name: CLI App CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: CLI-App
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: CLI-App/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript compile check
+        run: npm run build
+
+  # Deploy Backend to Railway (only on main branch push)
+  deploy-backend:
+    name: Deploy Backend to Railway
+    needs: backend-ci
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Trigger Railway Deploy
+        run: |
+          echo "Railway auto-deploys from GitHub. Deployment triggered via push."
+          echo "Check Railway dashboard for deployment status."
+
+  # Summary
+  ci-summary:
+    name: CI Summary
+    needs: [backend-ci, webapp-ci, cli-ci]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check CI results
+        run: |
+          echo "=== CI Pipeline Summary ==="
+          echo "Backend CI: ${{ needs.backend-ci.result }}"
+          echo "Web-App CI: ${{ needs.webapp-ci.result }}"
+          echo "CLI CI: ${{ needs.cli-ci.result }}"
+          if [[ "${{ needs.backend-ci.result }}" == "failure" || "${{ needs.webapp-ci.result }}" == "failure" || "${{ needs.cli-ci.result }}" == "failure" ]]; then
+            echo "❌ Some CI jobs failed"
+            exit 1
+          fi
+          echo "✅ All CI jobs passed"

@@ -79,6 +79,25 @@ export function initializeDatabase(): void {
     INSERT OR IGNORE INTO mining_config (id) VALUES (1)
   `);
 
+  // Scheduler State Table (for persistence across restarts)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS scheduler_state (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      is_running INTEGER DEFAULT 0,
+      passphrase_hash TEXT,
+      started_at INTEGER,
+      last_tick_at INTEGER,
+      processing_wallets TEXT DEFAULT '[]',
+      created_at INTEGER DEFAULT (unixepoch()),
+      updated_at INTEGER DEFAULT (unixepoch())
+    )
+  `);
+
+  // Insert default scheduler state if not exists
+  db.exec(`
+    INSERT OR IGNORE INTO scheduler_state (id) VALUES (1)
+  `);
+
   // Mining Events Table
   db.exec(`
     CREATE TABLE IF NOT EXISTS mining_events (
@@ -324,14 +343,15 @@ export const walletOps: Record<string, Statement> = {
     SELECT w.* FROM mining_wallets w
     LEFT JOIN mining_events e ON w.last_event_id = e.id
     WHERE w.status = 'active'
-      AND w.nft_type != 'NONE'
       AND (w.nft_expiry_at IS NULL OR w.nft_expiry_at > unixepoch())
       AND (
         w.last_event_id IS NULL
         OR (
           e.status = 'FINISHED'
           AND e.finished_at + (? * 60) <= unixepoch()
-          AND e.started_at + (23 * 3600) <= unixepoch()
+        )
+        OR (
+          e.status IN ('ERROR', 'TIMEOUT')
         )
       )
     ORDER BY w.id
@@ -388,6 +408,30 @@ export const configOps: Record<string, Statement> = {
     UPDATE mining_config 
     SET fcc_per_recipient = @fcc_per_recipient, total_fcc_per_event = @total_fcc_per_event, 
         expected_mining_reward = @expected_mining_reward, updated_at = unixepoch()
+    WHERE id = 1
+  `),
+};
+
+// Scheduler state operations
+export const schedulerOps: Record<string, Statement> = {
+  get: db.prepare(`SELECT * FROM scheduler_state WHERE id = 1`),
+  
+  start: db.prepare(`
+    UPDATE scheduler_state 
+    SET is_running = 1, passphrase_hash = @passphrase_hash, started_at = unixepoch(), 
+        last_tick_at = unixepoch(), updated_at = unixepoch()
+    WHERE id = 1
+  `),
+  
+  stop: db.prepare(`
+    UPDATE scheduler_state 
+    SET is_running = 0, passphrase_hash = NULL, processing_wallets = '[]', updated_at = unixepoch()
+    WHERE id = 1
+  `),
+  
+  updateTick: db.prepare(`
+    UPDATE scheduler_state 
+    SET last_tick_at = unixepoch(), processing_wallets = @processing_wallets, updated_at = unixepoch()
     WHERE id = 1
   `),
 };

@@ -1,7 +1,7 @@
 // Mining Module Barrel Export
 
 // Database
-export { db, initializeDatabase, walletOps, configOps, eventOps, dropOps, logOps, statsOps } from './database.js';
+export { db, initializeDatabase, walletOps, configOps, eventOps, dropOps, logOps, statsOps, schedulerOps } from './database.js';
 
 // Encryption
 export { encrypt, decrypt, encryptPrivateKey, decryptPrivateKey, verifyPassphrase, generatePassphrase } from './encryption.js';
