@@ -6,9 +6,5 @@ buildCommand = "npm install && npm run build"
 startCommand = "npm start"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-
-[[deploy.healthcheckPath]]
-path = "/health"
-
-[deploy.healthcheckTimeout]
-value = 300
+healthcheckPath = "/health"
+healthcheckTimeout = 300
