@@ -59,9 +59,13 @@ export function WalletManager() {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get provider
+  // Get provider - use working public RPC
   const getProvider = useCallback(() => {
-    return new ethers.JsonRpcProvider('https://polygon-rpc.com');
+    return new ethers.JsonRpcProvider('https://polygon-bor-rpc.publicnode.com', {
+      name: 'polygon',
+      chainId: 137,
+      staticNetwork: true
+    });
   }, []);
 
   // Fetch balances for a wallet
@@ -402,7 +406,7 @@ export function WalletManager() {
 
       {/* Import Form */}
       {showImport && (
-        <Card className="border-fishcake-500/30 bg-gradient-to-br from-fishcake-50/50 to-purple-50/50">
+        <Card className="border-fishcake-500/30 bg-white shadow-lg">
           <CardContent className="p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="font-bold text-sm flex items-center gap-2 text-gray-900">
@@ -421,7 +425,7 @@ export function WalletManager() {
                   variant="outline" 
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
-                  className="h-7 text-xs"
+                  className="h-7 text-xs bg-white"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
                   Import CSV
@@ -436,7 +440,7 @@ export function WalletManager() {
               <textarea
                 value={privateKeysInput}
                 onChange={(e) => setPrivateKeysInput(e.target.value)}
-                className="w-full h-28 px-3 py-2 rounded-lg bg-white border border-gray-200 font-mono text-xs resize-none focus:outline-none focus:ring-2 focus:ring-fishcake-500 focus:border-transparent"
+                className="w-full h-28 px-3 py-2 rounded-lg bg-gray-50 border border-gray-300 font-mono text-xs text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-fishcake-500 focus:border-transparent placeholder:text-gray-400"
                 placeholder="0x... (enter private keys, one per line)"
                 disabled={isImporting}
               />
@@ -452,7 +456,7 @@ export function WalletManager() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password to encrypt keys"
-                  className="pr-10 text-sm h-9"
+                  className="pr-10 text-sm h-9 bg-gray-50 border-gray-300 text-gray-900"
                   disabled={isImporting}
                 />
                 <button
