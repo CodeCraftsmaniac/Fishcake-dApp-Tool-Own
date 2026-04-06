@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/stores';
 import { useMiningStore } from '@/lib/stores/miningStore';
 import { Button, Badge } from '@/components/ui';
+import { LiveGasPrice } from '@/components/shared/LiveGasPrice';
 import {
   LayoutDashboard,
   Wallet,
@@ -24,7 +25,6 @@ import {
   Moon,
   Sun,
   Bell,
-  Fuel,
 } from 'lucide-react';
 
 interface MiningLayoutProps {
@@ -44,7 +44,7 @@ const miningSidebarItems = [
 
 export function MiningLayout({ children, selectedWalletId, onSelectWallet }: MiningLayoutProps) {
   const pathname = usePathname();
-  const { sidebarOpen, toggleSidebar, theme, setTheme, gasPrice } = useUIStore();
+  const { sidebarOpen, toggleSidebar, theme, setTheme } = useUIStore();
   const { 
     isAutomationRunning, 
     startAutomation, 
@@ -218,16 +218,9 @@ export function MiningLayout({ children, selectedWalletId, onSelectWallet }: Min
         {/* Header with Status Controls */}
         <header className="sticky top-0 z-30 h-16 border-b border-border bg-background/80 backdrop-blur-xl">
           <div className="flex h-full items-center justify-between px-6">
-            {/* Left side - Gas + Section Title */}
+            {/* Left side - Live Gas + Section Title */}
             <div className="flex items-center gap-4">
-              {gasPrice !== null && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary">
-                  <Fuel className="h-4 w-4 text-purple-500" />
-                  <span className="text-sm font-medium">
-                    {gasPrice} Gwei
-                  </span>
-                </div>
-              )}
+              <LiveGasPrice />
               <div className="h-6 w-px bg-border" />
               <h1 className="text-lg font-semibold">
                 {miningSidebarItems.find(i => i.id === activeSection)?.label || 'Mining Automation'}

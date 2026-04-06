@@ -133,10 +133,12 @@ interface UIState {
   theme: 'light' | 'dark';
   sidebarOpen: boolean;
   gasPrice: number | null;
+  gasTrend: 'up' | 'down' | 'stable';
   setTheme: (theme: 'light' | 'dark') => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   setGasPrice: (price: number | null) => void;
+  setGasTrend: (trend: 'up' | 'down' | 'stable') => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -145,10 +147,12 @@ export const useUIStore = create<UIState>()(
       theme: 'dark',
       sidebarOpen: true,
       gasPrice: null,
+      gasTrend: 'stable',
       setTheme: (theme) => set({ theme }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
       setGasPrice: (gasPrice) => set({ gasPrice }),
+      setGasTrend: (gasTrend) => set({ gasTrend }),
     }),
     {
       name: 'fishcake-ui',

@@ -26,6 +26,10 @@ import {
   Fuel,
   Menu,
   X,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  XCircle,
 } from 'lucide-react';
 
 interface MiningLayoutProps {
@@ -279,23 +283,20 @@ export default function MiningLayout({ children }: MiningLayoutProps) {
 
             {/* Right side - Controls */}
             <div className="flex items-center gap-2 sm:gap-3">
-              {/* Automation Status Badge - Hidden on very small */}
+              {/* Automation Status Badge */}
               <Badge 
-                variant={isAutomationRunning ? 'default' : 'secondary'}
                 className={cn(
-                  'px-2 sm:px-2.5 py-1 text-[10px]',
+                  'px-2 sm:px-2.5 py-1 text-[10px] font-bold',
                   isAutomationRunning 
                     ? 'bg-green-50 text-green-600 border-green-200' 
-                    : 'bg-gray-100 text-gray-600 border-gray-200'
+                    : 'bg-red-50 text-red-600 border-red-200'
                 )}
               >
                 <div className={cn(
                   'w-1.5 h-1.5 rounded-full mr-1 sm:mr-1.5',
-                  isAutomationRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                  isAutomationRunning ? 'bg-green-500 animate-pulse' : 'bg-red-500'
                 )} />
-                <span className="hidden xs:inline">
-                  {isAutomationRunning ? 'Running' : 'Stopped'}
-                </span>
+                {isAutomationRunning ? 'Running' : 'Paused'}
               </Badge>
 
               {/* Start/Stop Button */}
@@ -303,7 +304,7 @@ export default function MiningLayout({ children }: MiningLayoutProps) {
                 onClick={isAutomationRunning ? stopAutomation : startAutomation}
                 size="sm"
                 className={cn(
-                  'min-w-[90px] sm:min-w-[130px] h-8 text-xs',
+                  'min-w-[90px] sm:min-w-[130px] h-8 text-xs font-bold',
                   isAutomationRunning 
                     ? 'bg-red-500 hover:bg-red-600 text-white' 
                     : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white'
@@ -324,25 +325,8 @@ export default function MiningLayout({ children }: MiningLayoutProps) {
 
               <div className="hidden sm:block h-5 w-px bg-gray-200" />
 
-              {/* Theme toggle */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="hidden sm:flex rounded-full h-8 w-8 hover:bg-gray-100"
-              >
-                {theme === 'dark' ? (
-                  <Sun className="h-4 w-4 text-gray-600" />
-                ) : (
-                  <Moon className="h-4 w-4 text-gray-600" />
-                )}
-              </Button>
-
-              {/* Notifications */}
-              <Button variant="ghost" size="icon" className="hidden sm:flex rounded-full relative h-8 w-8 hover:bg-gray-100">
-                <Bell className="h-4 w-4 text-gray-600" />
-                <span className="absolute top-1 right-1 h-1.5 w-1.5 bg-orange-500 rounded-full" />
-              </Button>
+              {/* Notifications Dropdown */}
+              <NotificationDropdown />
             </div>
           </div>
         </header>
@@ -352,6 +336,162 @@ export default function MiningLayout({ children }: MiningLayoutProps) {
           {children}
         </main>
       </div>
+    </div>
+  );
+}
+
+
+// Notification Dropdown Component
+function NotificationDropdown() {
+  const [isOpen, setIsOpen] = useState(false);
+  const { events, logs, wallets, isAutomationRunning } = useMiningStore();
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (isOpen && !target.closest('[data-notification-dropdown]')) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  // Generate notifications from recent events and logs
+  const notifications = [
+    // Recent events
+    ...events.slice(0, 3).map(event => ({
+      id: `event-${event.id}`,
+      type: event.status === 'finished' ? 'success' : event.status === 'failed' ? 'error' : 'info',
+      title: `Event #${event.chainEventId || 'Pending'}`,
+      message: event.status === 'finished' 
+        ? `Completed with ${event.rewardReceived || '0'} FCC reward`
+        : event.status === 'failed'
+        ? 'Event failed'
+        : 'Event in progress',
+      time: new Date(event.startedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    })),
+    // Recent logs (errors and warnings)
+    ...logs.filter(log => log.level === 'error' || log.level === 'warn').slice(0, 2).map(log => ({
+      id: `log-${log.id}`,
+      type: log.level === 'error' ? 'error' : 'warning',
+      title: log.action,
+      message: log.message,
+      time: new Date(log.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    })),
+    // Wallet status notifications
+    ...wallets.filter(w => w.status === 'error' || w.status === 'nft_expired').slice(0, 2).map(wallet => ({
+      id: `wallet-${wallet.id}`,
+      type: 'warning',
+      title: 'Wallet Issue',
+      message: `${wallet.address.slice(0, 10)}... - ${wallet.status === 'nft_expired' ? 'NFT Expired' : 'Error'}`,
+      time: 'Now',
+    })),
+  ].slice(0, 5); // Limit to 5 notifications
+
+  const unreadCount = notifications.length;
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'success': return <CheckCircle2 className="w-4 h-4 text-green-600" />;
+      case 'error': return <XCircle className="w-4 h-4 text-red-600" />;
+      case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
+      default: return <Info className="w-4 h-4 text-blue-600" />;
+    }
+  };
+
+  const getBgColor = (type: string) => {
+    switch (type) {
+      case 'success': return 'bg-green-50 border-green-200';
+      case 'error': return 'bg-red-50 border-red-200';
+      case 'warning': return 'bg-yellow-50 border-yellow-200';
+      default: return 'bg-blue-50 border-blue-200';
+    }
+  };
+
+  return (
+    <div className="relative" data-notification-dropdown>
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={() => setIsOpen(!isOpen)}
+        className="hidden sm:flex rounded-full relative h-8 w-8 hover:bg-gray-100"
+      >
+        <Bell className="h-4 w-4 text-gray-600" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 h-4 w-4 bg-orange-500 rounded-full text-[10px] text-white font-bold flex items-center justify-center">
+            {unreadCount}
+          </span>
+        )}
+      </Button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border-2 border-gray-200 z-50 max-h-[500px] overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900">Notifications</h3>
+              <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs font-bold">
+                {unreadCount} New
+              </Badge>
+            </div>
+          </div>
+
+          {/* Notifications List */}
+          <div className="overflow-y-auto flex-1">
+            {notifications.length === 0 ? (
+              <div className="p-8 text-center">
+                <Bell className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                <p className="text-sm font-semibold text-gray-600">No notifications</p>
+                <p className="text-xs text-gray-500 mt-1">You're all caught up!</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {notifications.map((notif) => (
+                  <div 
+                    key={notif.id}
+                    className={cn(
+                      'p-3 hover:bg-gray-50 transition-colors cursor-pointer border-l-4',
+                      getBgColor(notif.type)
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 mt-0.5">
+                        {getIcon(notif.type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-900">{notif.title}</p>
+                        <p className="text-xs text-gray-700 mt-0.5 font-semibold">{notif.message}</p>
+                        <p className="text-[10px] text-gray-500 mt-1 font-semibold">{notif.time}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          {notifications.length > 0 && (
+            <div className="p-3 border-t border-gray-200 bg-gray-50">
+              <Link 
+                href="/mining/history"
+                onClick={() => setIsOpen(false)}
+                className="text-xs font-bold text-purple-600 hover:text-purple-700 block text-center"
+              >
+                View All Logs →
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

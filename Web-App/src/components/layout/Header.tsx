@@ -1,15 +1,16 @@
 'use client';
 
-import { Bell, Moon, Sun, Fuel, LogOut, Copy, ExternalLink } from 'lucide-react';
+import { Bell, Moon, Sun, LogOut, Copy, ExternalLink } from 'lucide-react';
 import { Button, Badge } from '@/components/ui';
 import { useUIStore, useWalletStore } from '@/lib/stores';
 import { useWallet } from '@/lib/providers';
 import { formatNumber, formatAddress } from '@/lib/utils';
 import { getExplorerUrl } from '@/lib/config';
+import { LiveGasPrice } from '@/components/shared/LiveGasPrice';
 import { useState } from 'react';
 
 export function Header() {
-  const { theme, setTheme, gasPrice } = useUIStore();
+  const { theme, setTheme } = useUIStore();
   const { balances } = useWalletStore();
   const { address, isConnected, disconnect } = useWallet();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -26,16 +27,9 @@ export function Header() {
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-border bg-background/80 backdrop-blur-xl">
       <div className="flex h-full items-center justify-between px-6">
-        {/* Left side - Gas tracker */}
+        {/* Left side - Live Gas tracker */}
         <div className="flex items-center gap-4">
-          {gasPrice !== null && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary">
-              <Fuel className="h-4 w-4 text-purple-500" />
-              <span className="text-sm font-medium">
-                {gasPrice} Gwei
-              </span>
-            </div>
-          )}
+          <LiveGasPrice />
         </div>
 
         {/* Right side - Actions & Wallet */}
