@@ -6,8 +6,7 @@ cmds = ["npm install --omit=dev"]
 cacheDirectories = ["node_modules"]
 
 [phases.build]
-cmds = ["npm run build"]
-cacheDirectories = ["dist"]
+cmds = ["rm -rf dist && npm run build"]
 
 [start]
 cmd = "npm start"

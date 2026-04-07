@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install --omit=dev && npm run build"
+buildCommand = "npm install --omit=dev && rm -rf dist && npm run build"
 
 [deploy]
 startCommand = "npm start"
