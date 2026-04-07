@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { useMiningStore, MiningWallet } from '@/lib/stores/miningStore';
+import { walletApi } from '@/lib/api/backendClient';
 import { Card, CardContent, Button, Input, Badge } from '@/components/ui';
 import { 
   Plus, 
@@ -163,7 +164,7 @@ export function WalletManager() {
         const cleanKey = key.startsWith('0x') ? key : `0x${key}`;
         const wallet = new ethers.Wallet(cleanKey);
         
-        // Check if already exists
+        // Check if already exists in local store
         if (wallets.some(w => w.address.toLowerCase() === wallet.address.toLowerCase())) {
           updateImportStatus(wallet.address, {
             step: 'failed',
@@ -171,6 +172,31 @@ export function WalletManager() {
             error: 'Duplicate wallet',
           });
           continue;
+        }
+
+        // First, import to backend (this is the source of truth for automation)
+        updateImportStatus(wallet.address, {
+          step: 'fetching_balances',
+          message: 'Importing to backend...',
+        });
+
+        try {
+          const backendResult = await walletApi.import([cleanKey], password);
+          if (!backendResult.success) {
+            throw new Error(backendResult.error || 'Backend import failed');
+          }
+          const walletResult = backendResult.data?.results?.[0];
+          if (walletResult && !walletResult.success) {
+            throw new Error(walletResult.error || 'Import failed');
+          }
+        } catch (backendError) {
+          console.error('Backend import error:', backendError);
+          // Continue with local import even if backend fails
+          addLog({
+            level: 'warn',
+            action: 'WALLET_IMPORT',
+            message: `Backend sync failed for ${wallet.address.slice(0, 8)}...: ${(backendError as Error).message}`,
+          });
         }
 
         // Fetch balances
@@ -193,7 +219,7 @@ export function WalletManager() {
         const salt = crypto.randomUUID();
         const iv = crypto.randomUUID();
 
-        // Add wallet to store
+        // Add wallet to local store
         addWallet({
           address: wallet.address,
           encryptedKey: btoa(cleanKey),
@@ -227,6 +253,9 @@ export function WalletManager() {
           action: 'WALLET_IMPORT',
           message: `Wallet ${wallet.address.slice(0, 8)}...${wallet.address.slice(-4)} imported successfully`,
         });
+
+        // Store passphrase in session for automation
+        sessionStorage.setItem('mining_passphrase', password);
 
         // Small delay between imports
         await new Promise(r => setTimeout(r, 500));
