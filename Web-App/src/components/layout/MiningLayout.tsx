@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/stores';
 import { useMiningStore } from '@/lib/stores/miningStore';
+import { miningApi } from '@/lib/api/backendClient';
 import { Button, Badge } from '@/components/ui';
 import { LiveGasPrice } from '@/components/shared/LiveGasPrice';
 import {
@@ -25,6 +26,7 @@ import {
   Moon,
   Sun,
   Bell,
+  Loader2,
 } from 'lucide-react';
 
 interface MiningLayoutProps {
@@ -53,6 +55,92 @@ export function MiningLayout({ children, selectedWalletId, onSelectWallet }: Min
   } = useMiningStore();
 
   const [activeSection, setActiveSection] = useState('overview');
+  const [isLoading, setIsLoading] = useState(false);
+  const [backendRunning, setBackendRunning] = useState(false);
+  const [passphrase, setPassphrase] = useState<string | null>(null);
+  const [showPassphrasePrompt, setShowPassphrasePrompt] = useState(false);
+
+  // Sync with backend status on mount and periodically
+  const syncBackendStatus = useCallback(async () => {
+    try {
+      const response = await miningApi.status();
+      if (response.success && response.data) {
+        const isRunning = response.data.scheduler.isRunning;
+        setBackendRunning(isRunning);
+        // Sync local store with backend state
+        if (isRunning !== isAutomationRunning) {
+          if (isRunning) {
+            startAutomation();
+          } else {
+            stopAutomation();
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to sync backend status:', error);
+    }
+  }, [isAutomationRunning, startAutomation, stopAutomation]);
+
+  // Sync on mount and every 10 seconds
+  useEffect(() => {
+    syncBackendStatus();
+    const interval = setInterval(syncBackendStatus, 10000);
+    return () => clearInterval(interval);
+  }, [syncBackendStatus]);
+
+  // Handle start automation - needs passphrase
+  const handleStartAutomation = async () => {
+    // Get passphrase from session or prompt
+    const storedPassphrase = sessionStorage.getItem('mining_passphrase');
+    if (storedPassphrase) {
+      await startBackendAutomation(storedPassphrase);
+    } else {
+      setShowPassphrasePrompt(true);
+    }
+  };
+
+  const startBackendAutomation = async (pass: string) => {
+    setIsLoading(true);
+    try {
+      const response = await miningApi.start(pass);
+      if (response.success) {
+        setBackendRunning(true);
+        startAutomation();
+        sessionStorage.setItem('mining_passphrase', pass);
+        setPassphrase(pass);
+      } else {
+        console.error('Failed to start automation:', response.error);
+        alert(`Failed to start: ${response.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error starting automation:', error);
+      alert('Failed to connect to backend');
+    } finally {
+      setIsLoading(false);
+      setShowPassphrasePrompt(false);
+    }
+  };
+
+  // Handle stop automation
+  const handleStopAutomation = async () => {
+    setIsLoading(true);
+    try {
+      const response = await miningApi.stop();
+      if (response.success) {
+        setBackendRunning(false);
+        stopAutomation();
+      } else {
+        console.error('Failed to stop automation:', response.error);
+      }
+    } catch (error) {
+      console.error('Error stopping automation:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Use backend state as source of truth
+  const isRunning = backendRunning;
 
   return (
     <div className="min-h-screen bg-background">
@@ -71,7 +159,7 @@ export function MiningLayout({ children, selectedWalletId, onSelectWallet }: Min
               <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-600 via-pink-500 to-orange-500 flex-shrink-0">
                 <Cpu className="h-5 w-5 text-white" />
                 {/* Pulse indicator */}
-                {isAutomationRunning && (
+                {isRunning && (
                   <span className="absolute -top-1 -right-1 flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
@@ -190,9 +278,9 @@ export function MiningLayout({ children, selectedWalletId, onSelectWallet }: Min
                   <span className="text-muted-foreground">Status</span>
                   <span className={cn(
                     'font-medium',
-                    isAutomationRunning ? 'text-green-400' : 'text-muted-foreground'
+                    isRunning ? 'text-green-400' : 'text-muted-foreground'
                   )}>
-                    {isAutomationRunning ? 'Running' : 'Stopped'}
+                    {isRunning ? 'Running' : 'Stopped'}
                   </span>
                 </div>
               </div>
@@ -200,7 +288,7 @@ export function MiningLayout({ children, selectedWalletId, onSelectWallet }: Min
               <div className="flex justify-center">
                 <div className={cn(
                   'h-2 w-2 rounded-full',
-                  isAutomationRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-500'
+                  isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-500'
                 )} />
               </div>
             )}
@@ -231,33 +319,39 @@ export function MiningLayout({ children, selectedWalletId, onSelectWallet }: Min
             <div className="flex items-center gap-4">
               {/* Automation Status Badge */}
               <Badge 
-                variant={isAutomationRunning ? 'default' : 'secondary'}
+                variant={isRunning ? 'default' : 'secondary'}
                 className={cn(
                   'px-3 py-1.5',
-                  isAutomationRunning 
+                  isRunning 
                     ? 'bg-green-500/20 text-green-400 border-green-500/30' 
                     : 'bg-secondary'
                 )}
               >
                 <div className={cn(
                   'w-2 h-2 rounded-full mr-2',
-                  isAutomationRunning ? 'bg-green-400 animate-pulse' : 'bg-gray-400'
+                  isRunning ? 'bg-green-400 animate-pulse' : 'bg-gray-400'
                 )} />
-                {isAutomationRunning ? 'Running' : 'Stopped'}
+                {isRunning ? 'Running' : 'Stopped'}
               </Badge>
 
               {/* Start/Stop Button */}
               <Button
-                onClick={isAutomationRunning ? stopAutomation : startAutomation}
+                onClick={isRunning ? handleStopAutomation : handleStartAutomation}
+                disabled={isLoading}
                 size="sm"
                 className={cn(
                   'min-w-[150px]',
-                  isAutomationRunning 
+                  isRunning 
                     ? 'bg-red-500 hover:bg-red-600' 
                     : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600'
                 )}
               >
-                {isAutomationRunning ? (
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {isRunning ? 'Stopping...' : 'Starting...'}
+                  </>
+                ) : isRunning ? (
                   <>
                     <Pause className="w-4 h-4 mr-2" />
                     Stop
@@ -300,6 +394,56 @@ export function MiningLayout({ children, selectedWalletId, onSelectWallet }: Min
           {children}
         </main>
       </div>
+
+      {/* Passphrase Prompt Dialog */}
+      {showPassphrasePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card p-6 rounded-lg border border-border w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold mb-4">Enter Passphrase</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Enter the passphrase used to encrypt your wallets to start automation.
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const pass = formData.get('passphrase') as string;
+                if (pass) {
+                  startBackendAutomation(pass);
+                }
+              }}
+            >
+              <input
+                type="password"
+                name="passphrase"
+                placeholder="Enter passphrase..."
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground mb-4"
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowPassphrasePrompt(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    'Start Automation'
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
