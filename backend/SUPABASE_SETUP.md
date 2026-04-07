@@ -28,17 +28,20 @@ And this view:
 
 ## Step 4: Configure Environment Variables
 
-Add these to Railway environment variables:
+Add these to your server environment (Oracle VM or local):
 
 ```env
 # Supabase Configuration
-SUPABASE_URL=https://znatmrnkfjptiensiybb.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NDUyMjgsImV4cCI6MjA5MTEyMTIyOH0.dRdIWV2Ps9eMuWMhoQKFczJUMXFkZo9ahyNo7qOmWw8
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTU0NTIyOCwiZXhwIjoyMDkxMTIxMjI4fQ.1oTu1CHLdYwUFtLAlO7IEkqwrqgIFQQFGMPYdXDnNFA
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-# Set this to use Supabase instead of SQLite
-DATABASE_TYPE=supabase
+# Server Configuration
+PORT=8080
+NODE_ENV=production
 ```
+
+**Get these values from Supabase Dashboard > Settings > API**
 
 ## Step 5: Security Notes
 
@@ -51,18 +54,6 @@ DATABASE_TYPE=supabase
 - **NEVER** expose the Service Role Key in frontend code
 - Only use the Anon Key in client-side applications
 - Store keys in environment variables, never in code
-
-## Connection Details
-
-- **Project URL**: https://znatmrnkfjptiensiybb.supabase.co
-- **PostgreSQL Connection**: 
-  ```
-  Host: db.znatmrnkfjptiensiybb.supabase.co
-  Port: 5432
-  Database: postgres
-  User: postgres
-  Password: HP2K9IFrOajXveGU
-  ```
 
 ## Features
 

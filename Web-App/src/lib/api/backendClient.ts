@@ -1,11 +1,12 @@
 /**
  * Fishcake Backend API Client
  * 
- * Connects the Web-App (Vercel) to the Backend Server (Railway)
+ * Connects the Web-App (Vercel) to the Backend Server (Oracle VM)
  */
 
 // API Base URL - MUST be set via environment variable in production
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://fishcake-dapp-tool-production.up.railway.app';
+// In production: Set NEXT_PUBLIC_API_URL to your Oracle VM backend URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 interface ApiResponse<T> {
   success: boolean;

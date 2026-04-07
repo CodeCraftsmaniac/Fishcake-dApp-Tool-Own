@@ -17,6 +17,22 @@
 - Boot volume size: 50 GB
 - Boot volume performance: 10 VPUs/GB
 
+
+ocid1.tenancy.oc1..aaaaaaaa66bsc3ztzcpw4q5uoltpibjtszdwtcre5kfha5y4vm537ix2aaaa
+
+ocid1.user.oc1..aaaaaaaabd25alnsuepoa6f35rsvv32pgz65e5vbyikk2fdyzorxor4xrmdq
+
+event@fishcake.io-2026-04-03T06_28_56.247Z file
+
+2c:5d:57:81:a9:26:fd:37:d8:76:8e:db:ab:ac:63:ce
+
+[DEFAULT]
+user=ocid1.user.oc1..aaaaaaaabd25alnsuepoa6f35rsvv32pgz65e5vbyikk2fdyzorxor4xrmdq
+fingerprint=2c:5d:57:81:a9:26:fd:37:d8:76:8e:db:ab:ac:63:ce
+tenancy=ocid1.tenancy.oc1..aaaaaaaa66bsc3ztzcpw4q5uoltpibjtszdwtcre5kfha5y4vm537ix2aaaa
+region=us-ashburn-1
+key_file=<path to your private keyfile> # TODO
+
 ## How to access fishcake-second-bot
 
 Use the same SSH private key pair already used for fcc-trade-bot (the public key is attached to this VM metadata).

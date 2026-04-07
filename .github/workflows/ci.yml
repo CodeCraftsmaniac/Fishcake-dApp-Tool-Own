@@ -83,9 +83,9 @@ jobs:
       - name: TypeScript compile check
         run: npm run build
 
-  # Deploy Backend to Railway (only on main branch push)
+  # Deploy Backend to Oracle VM (only on main branch push)
   deploy-backend:
-    name: Deploy Backend to Railway
+    name: Deploy Backend to Oracle VM
     needs: backend-ci
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -94,10 +94,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Trigger Railway Deploy
-        run: |
-          echo "Railway auto-deploys from GitHub. Deployment triggered via push."
-          echo "Check Railway dashboard for deployment status."
+      - name: Deploy to Oracle VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ORACLE_VM_HOST }}
+          username: ${{ secrets.ORACLE_VM_USER }}
+          key: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          script: |
+            cd ~/fishcake-backend
+            git pull origin main
+            npm ci --omit=dev
+            npm run build
+            pm2 restart fishcake-backend || pm2 start dist/serverSupabase.js --name fishcake-backend
+            pm2 save
 
   # Summary
   ci-summary:
