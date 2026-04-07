@@ -35,9 +35,7 @@ export interface WalletWorkflow {
 export interface MiningWallet {
   id: string;
   address: string;
-  encryptedKey: string;
-  salt: string;
-  iv: string;
+  // encryptedKey is NOT stored locally - only the backend stores encrypted keys securely
   status: 'active' | 'paused' | 'error' | 'nft_expired';
   nftType: 'NONE' | 'BASIC' | 'PRO';
   nftExpiry: number | null;
@@ -300,8 +298,9 @@ export const useMiningStore = create<MiningStore>()(
       },
 
       importWallets: async (privateKeys, password) => {
-        // This will be implemented with actual encryption
-        const { addLog, addWallet } = get();
+        // NOTE: Actual wallet import is handled by the backend via walletApi.import()
+        // This store action is for local state only - keys are NOT stored in browser
+        const { addLog } = get();
         
         for (const key of privateKeys) {
           try {
@@ -315,7 +314,8 @@ export const useMiningStore = create<MiningStore>()(
               continue;
             }
 
-            // TODO: Derive address, encrypt key, fetch balances
+            // Backend handles encryption and storage securely
+            // Frontend only tracks wallet metadata (address, status, balances)
             addLog({
               level: 'info',
               action: 'WALLET_IMPORT',

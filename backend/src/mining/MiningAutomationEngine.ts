@@ -1,6 +1,12 @@
 // Mining Automation Scheduler - Backend Engine
 import { ethers } from 'ethers';
 import { EventEmitter } from 'events';
+import crypto from 'crypto';
+
+// Encryption constants
+const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_DIGEST = 'sha256';
+const KEY_LENGTH = 32;
 
 // Types
 export interface MiningWallet {
@@ -9,6 +15,7 @@ export interface MiningWallet {
   encryptedKey: string;
   salt: string;
   iv: string;
+  authTag: string;
   status: 'active' | 'paused' | 'error' | 'nft_expired';
   nftType: 'NONE' | 'BASIC' | 'PRO';
   nftExpiry: number | null;
@@ -106,6 +113,7 @@ export class MiningAutomationEngine extends EventEmitter {
   private wallets: Map<string, MiningWallet> = new Map();
   private events: Map<string, MiningEvent> = new Map();
   private currentWorkflow: WorkflowStep[] = [];
+  private passphrase: string = '';
 
   constructor(rpcUrl: string = 'https://polygon-rpc.com') {
     super();
@@ -336,12 +344,53 @@ export class MiningAutomationEngine extends EventEmitter {
   }
 
   /**
-   * Decrypt wallet private key
+   * Derive encryption key from passphrase using PBKDF2
+   */
+  private deriveKey(passphrase: string, salt: Buffer): Buffer {
+    return crypto.pbkdf2Sync(
+      passphrase,
+      salt,
+      PBKDF2_ITERATIONS,
+      KEY_LENGTH,
+      PBKDF2_DIGEST
+    );
+  }
+
+  /**
+   * Decrypt wallet private key using AES-256-GCM
    */
   private decryptWallet(wallet: MiningWallet): ethers.Wallet {
-    // TODO: Implement proper AES-256-GCM decryption
-    const privateKey = atob(wallet.encryptedKey);
+    if (!this.passphrase) {
+      throw new Error('Passphrase not set');
+    }
+
+    // Parse hex strings back to buffers
+    const salt = Buffer.from(wallet.salt, 'hex');
+    const iv = Buffer.from(wallet.iv, 'hex');
+    const authTag = Buffer.from(wallet.authTag, 'hex');
+    
+    // Derive key from passphrase
+    const key = this.deriveKey(this.passphrase, salt);
+    
+    // Create decipher with AES-256-GCM
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+    
+    // Decrypt
+    let decrypted = decipher.update(wallet.encryptedKey, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    // Ensure 0x prefix for ethers
+    const privateKey = decrypted.startsWith('0x') ? decrypted : `0x${decrypted}`;
+    
     return new ethers.Wallet(privateKey, this.provider);
+  }
+
+  /**
+   * Set the passphrase for wallet decryption
+   */
+  setPassphrase(passphrase: string): void {
+    this.passphrase = passphrase;
   }
 
   /**

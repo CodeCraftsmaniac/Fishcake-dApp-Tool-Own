@@ -215,16 +215,10 @@ export function WalletManager() {
 
         const nftInfo = await fetchNftInfo(wallet.address, provider);
 
-        // Encrypt key (using base64 for now - TODO: proper AES-256-GCM)
-        const salt = crypto.randomUUID();
-        const iv = crypto.randomUUID();
-
-        // Add wallet to local store
+        // Add wallet to local store (without encrypted key - backend is source of truth)
         addWallet({
           address: wallet.address,
-          encryptedKey: btoa(cleanKey),
-          salt,
-          iv,
+          // Note: encrypted keys are ONLY stored on the backend, not in browser localStorage
           status: 'active',
           nftType: nftInfo.nftType as 'NONE' | 'BASIC' | 'PRO',
           nftExpiry: nftInfo.nftExpiry,

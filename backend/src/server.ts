@@ -40,8 +40,15 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
     
-    // Check against allowed frontend URLs
-    if (FRONTEND_URLS.some(url => origin.startsWith(url.trim()))) {
+    // Check against allowed frontend URLs using exact match (secure)
+    // Normalize URLs: remove trailing slashes and compare exactly
+    const normalizedOrigin = origin.replace(/\/+$/, '');
+    const isAllowed = FRONTEND_URLS.some(url => {
+      const normalizedUrl = url.trim().replace(/\/+$/, '');
+      return normalizedOrigin === normalizedUrl;
+    });
+    
+    if (isAllowed) {
       return callback(null, true);
     }
     

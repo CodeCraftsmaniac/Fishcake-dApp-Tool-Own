@@ -7,25 +7,36 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Environment configuration
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://znatmrnkfjptiensiybb.supabase.co';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+// Lazy initialization - Supabase client is created on first use
+let _supabase: SupabaseClient | null = null;
 
-// Validate configuration
-if (!SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('⚠️ WARNING: SUPABASE_SERVICE_ROLE_KEY not set!');
+/**
+ * Get the Supabase client (lazy initialization)
+ * This ensures dotenv is loaded before we try to read env vars
+ */
+function db(): SupabaseClient {
+  if (!_supabase) {
+    const SUPABASE_URL = process.env.SUPABASE_URL || 'https://znatmrnkfjptiensiybb.supabase.co';
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    
+    if (!SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY is required but not set!');
+    }
+    
+    console.log('🔗 Initializing Supabase client...');
+    console.log(`   URL: ${SUPABASE_URL}`);
+    _supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+  }
+  return _supabase;
 }
 
-// Create Supabase admin client (bypasses RLS)
-const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-});
-
-// Export for direct use
-export { supabase };
+// Export the getter function for external use
+export { db as supabase };
 
 /**
  * Type Definitions
@@ -125,13 +136,16 @@ export interface SchedulerState {
  * Initialize database (verify Supabase connection and tables)
  */
 export async function initializeDatabase(): Promise<void> {
+  const supabaseUrl = process.env.SUPABASE_URL || 'https://znatmrnkfjptiensiybb.supabase.co';
+  const hasKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
   console.log('📦 Initializing Supabase connection...');
-  console.log(`   URL: ${SUPABASE_URL}`);
-  console.log(`   Key: ${SUPABASE_SERVICE_ROLE_KEY ? '***set***' : '⚠️ NOT SET'}`);
+  console.log(`   URL: ${supabaseUrl}`);
+  console.log(`   Key: ${hasKey ? '***set***' : '⚠️ NOT SET'}`);
   
   try {
     // Check if tables exist by querying mining_config
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_config')
       .select('id')
       .eq('id', 1)
@@ -145,12 +159,12 @@ export async function initializeDatabase(): Promise<void> {
       // If no row found, insert default
       if (error.code === 'PGRST116') {
         console.log('📝 Inserting default config row...');
-        await supabase.from('mining_config').insert({ id: 1 });
+        await db().from('mining_config').insert({ id: 1 });
       }
     }
     
     // Check scheduler_state table
-    const { error: schedError } = await supabase
+    const { error: schedError } = await db()
       .from('scheduler_state')
       .select('id')
       .eq('id', 1)
@@ -158,7 +172,7 @@ export async function initializeDatabase(): Promise<void> {
     
     if (schedError?.code === 'PGRST116') {
       console.log('📝 Inserting default scheduler state...');
-      await supabase.from('scheduler_state').insert({ id: 1, is_running: false, processing_wallets: '[]' });
+      await db().from('scheduler_state').insert({ id: 1, is_running: false, processing_wallets: '[]' });
     }
     
     console.log('✅ Supabase database initialized');
@@ -180,7 +194,7 @@ export function closeDatabase(): void {
  */
 export const walletOps = {
   async getAll(): Promise<MiningWallet[]> {
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_wallets')
       .select('*')
       .order('created_at', { ascending: false });
@@ -190,7 +204,7 @@ export const walletOps = {
   },
 
   async getActive(): Promise<MiningWallet[]> {
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_wallets')
       .select('*')
       .eq('status', 'active');
@@ -200,7 +214,7 @@ export const walletOps = {
   },
 
   async getByAddress(address: string): Promise<MiningWallet | null> {
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_wallets')
       .select('*')
       .ilike('address', address)
@@ -215,7 +229,7 @@ export const walletOps = {
     const minTime = now - (offsetMinutes * 60);
     
     // Get active wallets that are ready for a new event
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_wallets')
       .select('*')
       .eq('status', 'active')
@@ -234,7 +248,7 @@ export const walletOps = {
 
   async insert(wallet: Partial<MiningWallet>): Promise<MiningWallet> {
     const now = Math.floor(Date.now() / 1000);
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_wallets')
       .insert({
         address: wallet.address?.toLowerCase(),
@@ -259,7 +273,7 @@ export const walletOps = {
   },
 
   async updateStatus(id: number, status: string, failureCount: number, lastError: string | null): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_wallets')
       .update({
         status,
@@ -273,7 +287,7 @@ export const walletOps = {
   },
 
   async updateBalances(id: number, fccBalance: string, usdtBalance: string, polBalance: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_wallets')
       .update({
         fcc_balance: fccBalance,
@@ -287,7 +301,7 @@ export const walletOps = {
   },
 
   async updateNFT(id: number, nftType: string, nftExpiryAt: number | null, nftTokenId: number | null): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_wallets')
       .update({
         nft_type: nftType,
@@ -301,7 +315,7 @@ export const walletOps = {
   },
 
   async updateLastEvent(id: number, lastEventId: number, nextEventAt: number): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_wallets')
       .update({
         last_event_id: lastEventId,
@@ -314,7 +328,7 @@ export const walletOps = {
   },
 
   async delete(address: string): Promise<boolean> {
-    const { error, count } = await supabase
+    const { error, count } = await db()
       .from('mining_wallets')
       .delete()
       .ilike('address', address);
@@ -329,7 +343,7 @@ export const walletOps = {
  */
 export const configOps = {
   async get(): Promise<MiningConfig> {
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_config')
       .select('*')
       .eq('id', 1)
@@ -340,7 +354,7 @@ export const configOps = {
   },
 
   async updateRecipients(addr1: string, addr2: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_config')
       .update({
         recipient_address_1: addr1,
@@ -353,7 +367,7 @@ export const configOps = {
   },
 
   async updateAmounts(fccPerRecipient: string, totalFcc: string, reward: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_config')
       .update({
         fcc_per_recipient: fccPerRecipient,
@@ -367,7 +381,7 @@ export const configOps = {
   },
 
   async updateScheduler(enabled: number, intervalHours: number, offsetMinutes: number, maxConcurrent: number): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_config')
       .update({
         scheduler_enabled: enabled,
@@ -388,7 +402,7 @@ export const configOps = {
  */
 export const schedulerOps = {
   async get(): Promise<SchedulerState> {
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('scheduler_state')
       .select('*')
       .eq('id', 1)
@@ -400,7 +414,7 @@ export const schedulerOps = {
 
   async start(passphraseHash: string): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
-    const { error } = await supabase
+    const { error } = await db()
       .from('scheduler_state')
       .update({
         is_running: true,
@@ -415,7 +429,7 @@ export const schedulerOps = {
   },
 
   async stop(): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('scheduler_state')
       .update({
         is_running: false,
@@ -429,7 +443,7 @@ export const schedulerOps = {
   },
 
   async updateTick(processingWallets: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('scheduler_state')
       .update({
         last_tick_at: Math.floor(Date.now() / 1000),
@@ -448,7 +462,7 @@ export const schedulerOps = {
 export const eventOps = {
   async insert(walletId: number): Promise<number> {
     const now = Math.floor(Date.now() / 1000);
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_events')
       .insert({
         wallet_id: walletId,
@@ -466,7 +480,7 @@ export const eventOps = {
   },
 
   async getById(id: number): Promise<MiningEvent | null> {
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_events')
       .select('*')
       .eq('id', id)
@@ -477,7 +491,7 @@ export const eventOps = {
   },
 
   async getByWallet(walletId: number): Promise<MiningEvent[]> {
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_events')
       .select('*')
       .eq('wallet_id', walletId)
@@ -488,7 +502,7 @@ export const eventOps = {
   },
 
   async getRecent(limit: number): Promise<(MiningEvent & { wallet_address: string })[]> {
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_events')
       .select('*, mining_wallets!inner(address)')
       .order('created_at', { ascending: false })
@@ -504,7 +518,7 @@ export const eventOps = {
   },
 
   async updateStatus(id: number, status: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_events')
       .update({
         status,
@@ -516,7 +530,7 @@ export const eventOps = {
   },
 
   async updateChainId(id: number, chainEventId: number): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_events')
       .update({
         chain_event_id: chainEventId,
@@ -529,7 +543,7 @@ export const eventOps = {
   },
 
   async updateDrop1(id: number, txHash: string, amount: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_events')
       .update({
         drop_1_completed: 1,
@@ -545,7 +559,7 @@ export const eventOps = {
 
   async updateDrop2(id: number, txHash: string, amount: string, total: string): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_events')
       .update({
         drop_2_completed: 1,
@@ -564,7 +578,7 @@ export const eventOps = {
 
   async updateReward(id: number, amount: string): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_events')
       .update({
         reward_eligible: 1,
@@ -580,7 +594,7 @@ export const eventOps = {
 
   async finish(id: number): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_events')
       .update({
         status: 'FINISHED',
@@ -593,7 +607,7 @@ export const eventOps = {
   },
 
   async updateError(id: number, errorMessage: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_events')
       .update({
         status: 'FAILED',
@@ -606,7 +620,7 @@ export const eventOps = {
     
     // Increment retry_count via RPC if available
     try {
-      const { error: rpcError } = await supabase.rpc('increment_retry_count', { event_id: id });
+      const { error: rpcError } = await db().rpc('increment_retry_count', { event_id: id });
       if (rpcError) {
         // RPC might not exist, try alternative or ignore
         console.log('increment_retry_count RPC not available:', rpcError.message);
@@ -622,7 +636,7 @@ export const eventOps = {
  */
 export const logOps = {
   async insert(log: Partial<MiningLog>): Promise<void> {
-    const { error } = await supabase
+    const { error } = await db()
       .from('mining_logs')
       .insert({
         wallet_id: log.wallet_id || null,
@@ -642,7 +656,7 @@ export const logOps = {
   },
 
   async getRecent(limit: number): Promise<MiningLog[]> {
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_logs')
       .select('*')
       .order('created_at', { ascending: false })
@@ -653,7 +667,7 @@ export const logOps = {
   },
 
   async getByWallet(walletId: number, limit: number): Promise<MiningLog[]> {
-    const { data, error } = await supabase
+    const { data, error } = await db()
       .from('mining_logs')
       .select('*')
       .eq('wallet_id', walletId)
@@ -679,17 +693,17 @@ export const statsOps = {
     success_rate: number | null;
   }> {
     // Get wallet counts
-    const { count: totalWallets } = await supabase
+    const { count: totalWallets } = await db()
       .from('mining_wallets')
       .select('*', { count: 'exact', head: true });
     
-    const { count: activeWallets } = await supabase
+    const { count: activeWallets } = await db()
       .from('mining_wallets')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
     
     // Get event counts
-    const { count: eventsTotal } = await supabase
+    const { count: eventsTotal } = await db()
       .from('mining_events')
       .select('*', { count: 'exact', head: true });
     
@@ -697,18 +711,18 @@ export const statsOps = {
     todayStart.setHours(0, 0, 0, 0);
     const todayUnix = Math.floor(todayStart.getTime() / 1000);
     
-    const { count: eventsToday } = await supabase
+    const { count: eventsToday } = await db()
       .from('mining_events')
       .select('*', { count: 'exact', head: true })
       .gte('created_at', todayUnix);
     
     // Get finished events for totals
-    const { data: finishedEvents } = await supabase
+    const { data: finishedEvents } = await db()
       .from('mining_events')
       .select('total_dropped, reward_received')
       .eq('status', 'FINISHED');
     
-    const { count: finishedCount } = await supabase
+    const { count: finishedCount } = await db()
       .from('mining_events')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'FINISHED');
@@ -743,4 +757,4 @@ export const statsOps = {
   },
 };
 
-export default supabase;
+export default db;
