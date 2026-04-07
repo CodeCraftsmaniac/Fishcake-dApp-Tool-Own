@@ -271,6 +271,7 @@ router.post('/wallets/import', async (req: Request, res: Response) => {
   try {
     const { privateKeys, passphrase } = req.body;
 
+    // Validate private keys array
     if (!privateKeys || !Array.isArray(privateKeys) || privateKeys.length === 0) {
       return res.status(400).json({
         success: false,
@@ -278,10 +279,27 @@ router.post('/wallets/import', async (req: Request, res: Response) => {
       });
     }
 
-    if (!passphrase) {
+    // Rate limit: max 50 wallets per import
+    const MAX_IMPORT_SIZE = 50;
+    if (privateKeys.length > MAX_IMPORT_SIZE) {
+      return res.status(400).json({
+        success: false,
+        error: `Maximum ${MAX_IMPORT_SIZE} wallets per import`
+      });
+    }
+
+    // Validate passphrase
+    if (!passphrase || typeof passphrase !== 'string') {
       return res.status(400).json({
         success: false,
         error: 'Passphrase required'
+      });
+    }
+
+    if (passphrase.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Passphrase must be at least 6 characters'
       });
     }
 
@@ -317,6 +335,15 @@ router.post('/wallets/import', async (req: Request, res: Response) => {
 router.get('/wallets/:address', (req: Request, res: Response) => {
   try {
     const address = req.params.address as string;
+    
+    // Validate address format
+    if (!ethers.isAddress(address)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid Ethereum address format'
+      });
+    }
+    
     const wallet = getWalletByAddress(address);
     
     if (!wallet) {

@@ -215,6 +215,8 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_wallets_next_event ON mining_wallets(next_event_at);
     CREATE INDEX IF NOT EXISTS idx_events_status ON mining_events(status);
     CREATE INDEX IF NOT EXISTS idx_events_wallet ON mining_events(wallet_id);
+    CREATE INDEX IF NOT EXISTS idx_events_wallet_status ON mining_events(wallet_id, status);
+    CREATE INDEX IF NOT EXISTS idx_events_created_status ON mining_events(created_at DESC, status);
     CREATE INDEX IF NOT EXISTS idx_drops_event ON mining_drops(event_id);
     CREATE INDEX IF NOT EXISTS idx_logs_wallet ON mining_logs(wallet_id);
     CREATE INDEX IF NOT EXISTS idx_logs_action ON mining_logs(action);
@@ -222,6 +224,18 @@ export function initializeDatabase(): void {
   `);
 
   console.log('✅ Mining database initialized');
+}
+
+/**
+ * Close database connection gracefully
+ */
+export function closeDatabase(): void {
+  try {
+    db.close();
+    console.log('✅ Mining database connection closed');
+  } catch (error) {
+    console.error('Error closing database:', error);
+  }
 }
 
 // Type definitions for database row results

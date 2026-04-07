@@ -182,6 +182,14 @@ async function mintNFT(
   );
 
   const receipt = await tx.wait();
+  
+  // Validate receipt
+  if (!receipt) {
+    throw new Error('NFT mint transaction failed - no receipt');
+  }
+  if (receipt.status !== 1) {
+    throw new Error(`NFT mint transaction reverted: ${receipt.hash}`);
+  }
 
   // Update wallet NFT info
   const expiryTimestamp = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60);
@@ -251,6 +259,14 @@ async function createOnChainEvent(
   );
 
   const receipt = await tx.wait();
+  
+  // Validate receipt
+  if (!receipt) {
+    throw new Error('Event creation transaction failed - no receipt');
+  }
+  if (receipt.status !== 1) {
+    throw new Error(`Event creation transaction reverted: ${receipt.hash}`);
+  }
 
   // Get chain event ID
   const chainEventId = Number(await eventManager.activityIdAcc());
@@ -309,7 +325,22 @@ async function executeDrop(
 
   try {
     const tx = await eventManager.drop(chainEventId, recipient, dropAmount);
-    const receipt = await tx.wait();
+    
+    // Wait with timeout
+    const receipt = await Promise.race([
+      tx.wait(1),
+      new Promise<null>((_, reject) => 
+        setTimeout(() => reject(new Error('Transaction confirmation timeout (120s)')), 120000)
+      )
+    ]);
+    
+    // Validate receipt
+    if (!receipt) {
+      throw new Error('Drop transaction failed - no receipt');
+    }
+    if (receipt.status !== 1) {
+      throw new Error(`Drop transaction reverted: ${receipt.hash}`);
+    }
 
     // Update drop record
     dropOps.updateStatus.run({

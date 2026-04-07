@@ -14,7 +14,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import { initializeDatabase, walletOps } from './mining/database.js';
+import { initializeDatabase, walletOps, closeDatabase } from './mining/database.js';
 import miningRoutes from './mining/miningRoutes.js';
 import { miningScheduler } from './mining/scheduler.js';
 import { getAllRpcStatus, getCurrentRpc } from './blockchain/rpcManager.js';
@@ -166,6 +166,10 @@ async function startServer() {
         console.log('⏸️  Stopping mining scheduler...');
         miningScheduler.stop();
       }
+      
+      // Close database connection
+      console.log('📦 Closing database connection...');
+      closeDatabase();
       
       // Close server
       server.close(() => {

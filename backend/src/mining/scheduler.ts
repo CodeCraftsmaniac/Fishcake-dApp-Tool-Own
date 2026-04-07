@@ -185,9 +185,11 @@ export class MiningScheduler extends EventEmitter {
         (w: MiningWallet) => !this.processingWallets.has(w.id)
       );
 
-      // Process each ready wallet
-      for (const wallet of walletsToProcess) {
-        this.processWalletAsync(wallet);
+      // Process wallets with controlled concurrency (no fire-and-forget)
+      const maxConcurrent = config.max_concurrent_wallets || 3;
+      for (let i = 0; i < walletsToProcess.length; i += maxConcurrent) {
+        const batch = walletsToProcess.slice(i, i + maxConcurrent);
+        await Promise.all(batch.map(wallet => this.processWalletAsync(wallet)));
       }
     } catch (error) {
       this.emit('error', error);
