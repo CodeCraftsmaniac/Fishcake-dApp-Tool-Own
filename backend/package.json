@@ -39,9 +39,11 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "clean": "rimraf dist",
-    "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts",
-    "server": "node dist/server.js",
+    "start": "node dist/serverSupabase.js",
+    "start:sqlite": "node dist/server.js",
+    "dev": "tsx watch src/serverSupabase.ts",
+    "dev:sqlite": "tsx watch src/server.ts",
+    "server": "node dist/serverSupabase.js",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

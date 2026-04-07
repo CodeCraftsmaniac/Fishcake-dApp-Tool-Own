@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS mining_config (
   event_interval_hours INTEGER DEFAULT 24,
   offset_minutes INTEGER DEFAULT 5,
   max_concurrent_events INTEGER DEFAULT 3,
+  max_concurrent_wallets INTEGER DEFAULT 3,
   
   max_retries INTEGER DEFAULT 3,
   retry_delay_seconds INTEGER DEFAULT 60,
@@ -295,6 +296,21 @@ SELECT
 
 -- Grant access to the view
 GRANT SELECT ON mining_statistics TO anon, authenticated, service_role;
+
+-- ============================================================================
+-- INCREMENTAL MIGRATIONS (for existing databases)
+-- ============================================================================
+
+-- Add max_concurrent_wallets column if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'mining_config' AND column_name = 'max_concurrent_wallets'
+  ) THEN
+    ALTER TABLE mining_config ADD COLUMN max_concurrent_wallets INTEGER DEFAULT 3;
+  END IF;
+END $$;
 
 -- ============================================================================
 -- DONE
