@@ -247,7 +247,7 @@ export const walletOps = {
   },
 
   async insert(wallet: Partial<MiningWallet>): Promise<MiningWallet> {
-    const now = Math.floor(Date.now() / 1000);
+    const now = new Date().toISOString();
     const { data, error } = await db()
       .from('mining_wallets')
       .insert({
@@ -262,8 +262,7 @@ export const walletOps = {
         fcc_balance: wallet.fcc_balance || '0',
         usdt_balance: wallet.usdt_balance || '0',
         pol_balance: wallet.pol_balance || '0',
-        created_at: now,
-        updated_at: now,
+        // Let Supabase handle timestamps with DEFAULT NOW()
       })
       .select()
       .single();
@@ -279,8 +278,7 @@ export const walletOps = {
         status,
         failure_count: failureCount,
         last_error: lastError,
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', id);
     
     if (error) throw error;
@@ -293,8 +291,7 @@ export const walletOps = {
         fcc_balance: fccBalance,
         usdt_balance: usdtBalance,
         pol_balance: polBalance,
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', id);
     
     if (error) throw error;
@@ -307,8 +304,7 @@ export const walletOps = {
         nft_type: nftType,
         nft_expiry_at: nftExpiryAt,
         nft_token_id: nftTokenId,
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', id);
     
     if (error) throw error;
@@ -320,8 +316,7 @@ export const walletOps = {
       .update({
         last_event_id: lastEventId,
         next_event_at: nextEventAt,
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', id);
     
     if (error) throw error;
@@ -359,8 +354,7 @@ export const configOps = {
       .update({
         recipient_address_1: addr1,
         recipient_address_2: addr2,
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', 1);
     
     if (error) throw error;
@@ -373,8 +367,7 @@ export const configOps = {
         fcc_per_recipient: fccPerRecipient,
         total_fcc_per_event: totalFcc,
         expected_mining_reward: reward,
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', 1);
     
     if (error) throw error;
@@ -389,8 +382,7 @@ export const configOps = {
         offset_minutes: offsetMinutes,
         max_concurrent_events: maxConcurrent,
         max_concurrent_wallets: maxConcurrent,
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', 1);
     
     if (error) throw error;
@@ -435,8 +427,7 @@ export const schedulerOps = {
         is_running: false,
         passphrase_hash: null,
         processing_wallets: '[]',
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', 1);
     
     if (error) throw error;
@@ -448,8 +439,7 @@ export const schedulerOps = {
       .update({
         last_tick_at: Math.floor(Date.now() / 1000),
         processing_wallets: processingWallets,
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', 1);
     
     if (error) throw error;
@@ -522,8 +512,7 @@ export const eventOps = {
       .from('mining_events')
       .update({
         status,
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', id);
     
     if (error) throw error;
@@ -535,8 +524,7 @@ export const eventOps = {
       .update({
         chain_event_id: chainEventId,
         status: 'CREATED',
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', id);
     
     if (error) throw error;
@@ -550,8 +538,7 @@ export const eventOps = {
         drop_1_tx_hash: txHash,
         drop_1_amount: amount,
         drops_checklist: '1/2',
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', id);
     
     if (error) throw error;
@@ -612,8 +599,7 @@ export const eventOps = {
       .update({
         status: 'FAILED',
         error_message: errorMessage,
-        updated_at: Math.floor(Date.now() / 1000),
-      })
+        })
       .eq('id', id);
     
     if (error) throw error;
@@ -646,7 +632,7 @@ export const logOps = {
         message: log.message || '',
         tx_hash: log.tx_hash || null,
         metadata: log.metadata || null,
-        created_at: Math.floor(Date.now() / 1000),
+        // created_at: handled by Supabase DEFAULT
       });
     
     if (error) {
