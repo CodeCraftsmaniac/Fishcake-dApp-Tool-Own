@@ -60,6 +60,14 @@ CREATE TABLE IF NOT EXISTS mining_config (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Add max_concurrent_wallets if it doesn't exist (for existing installations)
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'mining_config' AND column_name = 'max_concurrent_wallets') THEN
+    ALTER TABLE mining_config ADD COLUMN max_concurrent_wallets INTEGER DEFAULT 3;
+  END IF;
+END $$;
+
 -- Insert default config row
 INSERT INTO mining_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 

@@ -74,7 +74,7 @@ export interface MiningConfig {
   event_interval_hours: number;
   offset_minutes: number;
   max_concurrent_events: number;
-  max_concurrent_wallets: number;
+  max_concurrent_wallets?: number;  // Optional - may not exist in DB
   max_retries: number;
   retry_delay_seconds: number;
   created_at: number;
