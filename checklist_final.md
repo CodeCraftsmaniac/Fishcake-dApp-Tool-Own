@@ -96,28 +96,33 @@ EOF
 ```bash
 cd Web-App
 cat > .env.local << 'EOF'
-NEXT_PUBLIC_API_URL=https://fishcake-dapp-tool-production.up.railway.app
+NEXT_PUBLIC_API_URL=http://129.213.138.245:3001
 NEXT_PUBLIC_SUPABASE_URL=https://znatmrnkfjptiensiybb.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NDUyMjgsImV4cCI6MjA5MTEyMTIyOH0.dRdIWV2Ps9eMuWMhoQKFczJUMXFkZo9ahyNo7qOmWw8
 EOF
 ```
 
-**Railway Environment Variables:**
+**Oracle VM Environment Variables:**
 ```bash
-# Set via Railway dashboard or CLI:
-railway variables set SUPABASE_URL=https://znatmrnkfjptiensiybb.supabase.co
-railway variables set SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTU0NTIyOCwiZXhwIjoyMDkxMTIxMjI4fQ.1oTu1CHLdYwUFtLAlO7IEkqwrqgIFQQFGMPYdXDnNFA
-railway variables set SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NDUyMjgsImV4cCI6MjA5MTEyMTIyOH0.dRdIWV2Ps9eMuWMhoQKFczJUMXFkZo9ahyNo7qOmWw8
-railway variables set DATABASE_URL="postgresql://postgres:HP2K9IFrOajXveGU@db.znatmrnkfjptiensiybb.supabase.co:5432/postgres"
-railway variables set NODE_ENV=production
-railway variables set PORT=3001
+# SSH into Oracle VM and create .env file:
+ssh -i ~/.ssh/oracle_fcc_bot_v3 opc@129.213.138.245
+
+cat > ~/fishcake-backend/.env << 'EOF'
+SUPABASE_URL=https://znatmrnkfjptiensiybb.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTU0NTIyOCwiZXhwIjoyMDkxMTIxMjI4fQ.1oTu1CHLdYwUFtLAlO7IEkqwrqgIFQQFGMPYdXDnNFA
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NDUyMjgsImV4cCI6MjA5MTEyMTIyOH0.dRdIWV2Ps9eMuWMhoQKFczJUMXFkZo9ahyNo7qOmWw8
+DATABASE_URL=postgresql://postgres:HP2K9IFrOajXveGU@db.znatmrnkfjptiensiybb.supabase.co:5432/postgres
+NODE_ENV=production
+PORT=3001
+FRONTEND_URLS=https://fishcake-dapp.vercel.app,http://localhost:3000
+EOF
 ```
 
 **Vercel Environment Variables:**
 ```bash
 # Set via Vercel dashboard or CLI:
 vercel env add NEXT_PUBLIC_API_URL production
-# Value: https://fishcake-dapp-tool-production.up.railway.app
+# Value: http://129.213.138.245:3001
 
 vercel env add NEXT_PUBLIC_SUPABASE_URL production
 # Value: https://znatmrnkfjptiensiybb.supabase.co
@@ -133,7 +138,9 @@ SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 SUPABASE_ANON_KEY
 DATABASE_URL
-RAILWAY_TOKEN
+ORACLE_VM_HOST (129.213.138.245)
+ORACLE_VM_USER (opc)
+ORACLE_VM_SSH_KEY (contents of ~/.ssh/oracle_fcc_bot_v3 private key)
 VERCEL_TOKEN
 ```
 
@@ -641,36 +648,48 @@ VERCEL_TOKEN
 
 ## 📦 SECTION 8: DEPLOYMENT AUDIT
 
-### 8.1 Railway (Backend)
-- [ ] `railway.toml` configured correctly
-- [ ] Build command: `npm run build:backend`
-- [ ] Start command: `npm run start` (backend)
-- [ ] Environment variables set:
-  - [ ] `PORT`
+### 8.1 Oracle Cloud VM (Backend)
+- [ ] VM instance running (neil-blumenthal)
+- [ ] Security rules configured (ports 22, 80, 443, 3001, 8080)
+- [ ] SSH access working: `ssh -i ~/.ssh/oracle_fcc_bot_v3 opc@129.213.138.245`
+- [ ] Node.js 20 LTS installed via nvm
+- [ ] PM2 process manager installed globally
+- [ ] Nginx reverse proxy configured (optional)
+- [ ] Git repository cloned to ~/fishcake-backend
+- [ ] Environment variables set in .env:
+  - [ ] `PORT=3001`
   - [ ] `NODE_ENV=production`
   - [ ] `FRONTEND_URLS`
   - [ ] `SUPABASE_URL`
   - [ ] `SUPABASE_SERVICE_ROLE_KEY`
   - [ ] `SUPABASE_ANON_KEY`
-- [ ] Health check path: `/health`
-- [ ] Auto-deploy on push enabled
-- [ ] Custom domain configured (optional)
+- [ ] PM2 ecosystem.config.js configured
+- [ ] PM2 process running: `pm2 start ecosystem.config.js`
+- [ ] PM2 startup configured: `pm2 startup` + `pm2 save`
+- [ ] Health check responds: `curl http://129.213.138.245:3001/health`
+- [ ] Auto-deploy webhook configured (GitHub Actions)
+- [ ] Logs accessible: `pm2 logs fishcake-backend`
 
 ### 8.2 Vercel (Web-App)
 - [ ] `vercel.json` configured (if needed)
 - [ ] Build command: `npm run build:web`
 - [ ] Output directory: `.next`
 - [ ] Environment variables set:
-  - [ ] `NEXT_PUBLIC_API_URL`
+  - [ ] `NEXT_PUBLIC_API_URL=http://129.213.138.245:3001`
 - [ ] Auto-deploy on push enabled
 - [ ] Preview deployments working
 - [ ] Production domain configured
 
 ### 8.3 GitHub Actions (CI/CD)
-- [ ] Workflow file exists
+- [ ] Workflow file exists: `.github/workflows/ci.yml`
 - [ ] Build step passes
 - [ ] TypeScript check passes
 - [ ] Lint check passes (if configured)
+- [ ] Backend deploys via SSH to Oracle VM
+- [ ] GitHub Secrets configured:
+  - [ ] `ORACLE_VM_HOST`
+  - [ ] `ORACLE_VM_USER`
+  - [ ] `ORACLE_VM_SSH_KEY`
 - [ ] Test step passes (if tests exist)
 - [ ] Deploy triggers on main branch
 
@@ -891,9 +910,12 @@ VERCEL_TOKEN
 - [ ] Authentication explained
 
 ### 14.3 Deployment Docs
-- [ ] Railway setup documented
+- [ ] Oracle VM setup documented (ORACLE_VM_SETUP.md)
+- [ ] PM2 configuration documented
+- [ ] SSH access documented
+- [ ] CI/CD pipeline documented
 - [ ] Vercel setup documented
-- [ ] Supabase setup documented
+- [ ] Supabase setup documented (SUPABASE_SETUP.md)
 - [ ] Environment variables listed
 
 ### 14.4 Developer Guide
@@ -1098,7 +1120,7 @@ After completing this checklist:
 - [ ] Refresh token cleanup removes expired tokens
 - [ ] Refresh token max age enforced
 - [ ] Token rotation on use (one-time use)
-- [ ] No weak secrets like `fishcake-railway-production-secret`
+- [ ] No weak secrets in production environment
 
 ### 21.2 CORS Vulnerabilities
 - [ ] CORS origin check uses exact match (not `startsWith()`)
@@ -1164,7 +1186,7 @@ After completing this checklist:
 - [ ] Database password NOT in any committed file
 - [ ] JWT secret generated via `openssl rand -base64 64`
 - [ ] Encryption key generated via `openssl rand -hex 32`
-- [ ] All secrets in platform env vars (Railway, Vercel)
+- [ ] All secrets in platform env vars (Oracle VM, Vercel)
 - [ ] No secrets in GitHub Actions workflow files
 
 ### 22.2 Git Security
@@ -1289,8 +1311,8 @@ After completing this checklist:
 - [ ] `CLI-App/package.json` - correct dependencies
 - [ ] `tsconfig.json` (all) - strict mode
 - [ ] `.env.example` (all) - placeholder values
-- [ ] `railway.toml` - correct build/start
 - [ ] `vercel.json` - if exists, correct config
+- [ ] `ecosystem.config.js` - PM2 config (if exists)
 
 ---
 
@@ -1392,14 +1414,32 @@ grep -r "password\|secret\|key" --include="*.ts" --include="*.tsx" .
 
 ### 28.4 API Testing
 ```bash
-# Health check
-curl https://fishcake-dapp-tool-production.up.railway.app/health
+# Health check (Oracle VM)
+curl http://129.213.138.245:3001/health
 
 # Mining status
-curl https://fishcake-dapp-tool-production.up.railway.app/api/mining/status
+curl http://129.213.138.245:3001/api/mining/status
 
 # RPC status
-curl https://fishcake-dapp-tool-production.up.railway.app/api/rpc/status
+curl http://129.213.138.245:3001/api/rpc/status
+```
+
+### 28.5 Oracle VM Commands
+```bash
+# SSH into VM
+ssh -i ~/.ssh/oracle_fcc_bot_v3 opc@129.213.138.245
+
+# Check backend status
+pm2 status
+
+# View logs
+pm2 logs fishcake-backend --lines 100
+
+# Restart backend
+pm2 restart fishcake-backend
+
+# Pull latest code and restart
+cd ~/fishcake-backend && git pull && npm ci && npm run build:backend && pm2 restart fishcake-backend
 ```
 
 ---
@@ -1446,7 +1486,8 @@ curl https://fishcake-dapp-tool-production.up.railway.app/api/rpc/status
 
 1. **REMOVE** all credentials from this file
 2. Store credentials ONLY in:
-   - Platform environment variables (Railway, Vercel)
+   - Oracle VM environment files (~/.env.fishcake)
+   - Vercel environment variables
    - GitHub Secrets (for CI/CD)
    - Local `.env` files (gitignored)
 

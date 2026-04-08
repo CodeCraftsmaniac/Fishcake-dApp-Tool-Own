@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/stores';
 import { useMiningStore } from '@/lib/stores/miningStore';
 import { Button, Badge } from '@/components/ui';
+import StatusSidebar from '@/components/mining/StatusSidebar';
 import {
   LayoutDashboard,
   Wallet,
@@ -351,6 +352,9 @@ export default function MiningLayout({ children }: MiningLayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* System Status Sidebar */}
+      <StatusSidebar />
     </div>
   );
 }
