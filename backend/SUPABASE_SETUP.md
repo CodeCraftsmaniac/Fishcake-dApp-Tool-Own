@@ -1,4 +1,4 @@
-# Supabase Database Setup Guide
+# Supabase Database Setup Guid
 
 ## Step 1: Access Supabase Dashboard
 
