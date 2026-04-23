@@ -6,6 +6,10 @@ const nextConfig = {
   poweredByHeader: false,
   compress: true,
   
+  // Skip lint/type errors during build (lint runs as separate CI step)
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: false },
+  
   // Environment variables
   env: {
     NEXT_PUBLIC_POLYGON_RPC: process.env.NEXT_PUBLIC_POLYGON_RPC || 'https://polygon-mainnet.g.alchemy.com/v2/ho45p9JtQwjYllbKWKWNH',

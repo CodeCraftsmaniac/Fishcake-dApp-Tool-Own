@@ -21,7 +21,7 @@ interface NotificationState {
 
 // Simple global state for notifications
 let notifications: Notification[] = [];
-let listeners: Set<() => void> = new Set();
+const listeners: Set<() => void> = new Set();
 
 function notify() {
   listeners.forEach(listener => listener());
