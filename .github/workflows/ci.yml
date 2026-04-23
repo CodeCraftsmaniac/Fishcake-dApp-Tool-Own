@@ -91,74 +91,99 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
+    env:
+      VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+      VM_USER: ${{ secrets.ORACLE_VM_USER }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to Oracle VM via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.ORACLE_VM_HOST }}
-          username: ${{ secrets.ORACLE_VM_USER }}
-          key: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          script_stop: true
-          command_timeout: 10m
-          script: |
-            set -e
+          node-version: '20'
 
-            # --- First-time VM provisioning ---
+      - name: Install & Build backend (in CI - fast)
+        working-directory: backend
+        run: |
+          npm install --omit=dev
+          npm run build
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ORACLE_VM_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H $VM_HOST >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Provision VM (first-time only)
+        run: |
+          ssh -i ~/.ssh/deploy_key -o ConnectTimeout=30 $VM_USER@$VM_HOST << 'PROVISION'
+            set -e
+            # Install Node.js if missing
             if ! command -v node &> /dev/null; then
               echo "Installing Node.js 20..."
               curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
               sudo dnf install -y nodejs
             fi
-
+            # Install PM2 if missing
             if ! command -v pm2 &> /dev/null; then
               echo "Installing PM2..."
               sudo npm install -g pm2
+              pm2 startup 2>/dev/null | grep -o 'sudo .*' | bash 2>/dev/null || true
             fi
+            # Create app directory
+            mkdir -p ~/fishcake-backend/backend/dist ~/fishcake-backend/backend/node_modules ~/fishcake-backend/data
+            echo "Provisioning done"
+          PROVISION
 
-            if ! command -v git &> /dev/null; then
-              echo "Installing git..."
-              sudo dnf install -y git
-            fi
+      - name: Create .env on VM
+        run: |
+          ssh -i ~/.ssh/deploy_key $VM_USER@$VM_HOST << ENVFILE
+            cat > ~/fishcake-backend/backend/.env << 'EOF'
+            DATABASE_PATH=${{ secrets.DATABASE_PATH }}
+            FRONTEND_URLS=${{ secrets.FRONTEND_URLS }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            LOG_LEVEL=${{ secrets.LOG_LEVEL }}
+            MINING_DB_PATH=${{ secrets.MINING_DB_PATH }}
+            NODE_ENV=${{ secrets.NODE_ENV }}
+            PORT=3001
+            RPC_ALCHEMY=${{ secrets.RPC_ALCHEMY }}
+            RPC_ANKR=${{ secrets.RPC_ANKR }}
+            RPC_BLOCKPI=${{ secrets.RPC_BLOCKPI }}
+            RPC_DRPC=${{ secrets.RPC_DRPC }}
+            RPC_LLAMARPC=${{ secrets.RPC_LLAMARPC }}
+            RPC_PUBLICNODE=${{ secrets.RPC_PUBLICNODE }}
+            SCHEDULER_ENABLED=${{ secrets.SCHEDULER_ENABLED }}
+            SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+            EOF
+          ENVFILE
 
-            # --- Clone or update repo ---
-            if [ ! -d ~/fishcake-backend/.git ]; then
-              echo "Cloning repository..."
-              git clone https://github.com/CodeCraftsmaniac/Fishcake-dApp-Tool-Own.git ~/fishcake-backend
-            fi
+      - name: Rsync built backend to VM
+        run: |
+          rsync -az --delete --exclude='.env' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            backend/dist/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/dist/
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            backend/node_modules/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/node_modules/
+          rsync -az \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            backend/package.json ecosystem.config.js \
+            $VM_USER@$VM_HOST:~/fishcake-backend/
 
+      - name: Start/Restart backend via PM2
+        run: |
+          ssh -i ~/.ssh/deploy_key $VM_USER@$VM_HOST << 'START'
             cd ~/fishcake-backend
-
-            echo "Pulling latest code..."
-            git fetch origin main
-            git reset --hard origin/main
-
-            # --- Create .env if missing ---
-            if [ ! -f backend/.env ]; then
-              echo "Creating backend .env from example..."
-              cp backend/.env.example backend/.env
-              echo ""
-              echo "⚠️  IMPORTANT: Edit backend/.env with real values:"
-              echo "  vi ~/fishcake-backend/backend/.env"
-            fi
-
-            # --- Install, build, and restart ---
-            cd backend
-            echo "Installing dependencies..."
-            npm ci --omit=dev 2>/dev/null || npm install --omit=dev
-            echo "Building..."
-            npm run build
-            echo "Restarting PM2..."
-            pm2 restart fishcake-backend 2>/dev/null || pm2 start dist/serverSupabase.js --name fishcake-backend
+            pm2 restart fishcake-backend 2>/dev/null || \
+              pm2 start backend/dist/serverSupabase.js --name fishcake-backend
             pm2 save
-
-            # --- Ensure PM2 starts on boot ---
-            pm2 startup 2>/dev/null | grep -o 'sudo .*' | bash 2>/dev/null || true
-
-            echo "✅ Deploy complete!"
             pm2 status
+          START
 
   # Summary
   ci-summary:
