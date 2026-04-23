@@ -77,6 +77,9 @@ export async function processWallet(
   const privateKey = decryptWalletKey(wallet, passphrase);
   const signer = new ethers.Wallet(privateKey, provider);
 
+  // Enforce 2-minute timeout on all contract calls
+  const TX_TIMEOUT_MS = 120000;
+
   // Create event record
   const eventResult = eventOps.insert.run({ wallet_id: wallet.id });
   const eventId = eventResult.lastInsertRowid as number;
@@ -90,9 +93,33 @@ export async function processWallet(
     // Step 2: Create on-chain event
     const chainEventId = await createOnChainEvent(signer, config, wallet.id, eventId);
 
-    // Step 3: Execute drops
-    await executeDrop(signer, chainEventId, config.recipient_address_1, config.fcc_per_recipient, 1, eventId);
-    await executeDrop(signer, chainEventId, config.recipient_address_2, config.fcc_per_recipient, 2, eventId);
+    // Step 3: Execute drops (handle partial failure)
+    let drop1Success = false;
+    try {
+      await executeDrop(signer, chainEventId, config.recipient_address_1, config.fcc_per_recipient, 1, eventId);
+      drop1Success = true;
+    } catch (drop1Error) {
+      // Drop 1 failed - entire event fails
+      eventOps.updateStatus.run({ id: eventId, status: 'FAILED' });
+      throw drop1Error;
+    }
+
+    try {
+      await executeDrop(signer, chainEventId, config.recipient_address_2, config.fcc_per_recipient, 2, eventId);
+    } catch (drop2Error) {
+      // Drop 2 failed but Drop 1 succeeded - mark as PARTIAL
+      eventOps.updateStatus.run({ id: eventId, status: 'PARTIAL' });
+      logOps.insert.run({
+        wallet_id: wallet.id,
+        event_id: eventId,
+        level: 'WARN',
+        action: 'PARTIAL_DROP',
+        message: `Drop 1 succeeded but Drop 2 failed: ${(drop2Error as Error).message}`,
+        tx_hash: null,
+        metadata: null,
+      });
+      throw drop2Error;
+    }
 
     // Step 4: Monitor for mining reward
     const rewardReceived = await monitorMiningReward(

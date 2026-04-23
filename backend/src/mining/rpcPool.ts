@@ -247,6 +247,45 @@ class RpcPool {
     this.balanceCache.set(address, { balance, timestamp: Date.now() });
     return balance;
   }
+
+  /**
+   * Batch multiple calls into a single RPC request using Multicall3
+   * Falls back to individual calls if Multicall3 is not available
+   */
+  async batchCalls<T>(calls: Array<{ target: string; callData: string; decode: (result: string) => T }>): Promise<T[]> {
+    const MULTICALL3_ADDRESS = '0xcA11bde05977b3631167028862bE2a173976EA11'; // Polygon Mainnet
+    
+    try {
+      return await this.execute(async (provider) => {
+        const multicall = new ethers.Contract(MULTICALL3_ADDRESS, [
+          'function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) returns (tuple(bool success, bytes returnData)[] results)'
+        ], provider);
+
+        const callTuples = calls.map(c => ({ target: c.target, allowFailure: true, callData: c.callData }));
+        const results = await multicall.aggregate3.staticCall(callTuples);
+        
+        return results.map((r: { success: boolean; returnData: string }, i: number) => {
+          if (!r.success) return null as T;
+          return calls[i].decode(r.returnData);
+        });
+      });
+    } catch {
+      // Fallback: execute individually
+      const results: T[] = [];
+      for (const call of calls) {
+        try {
+          const result = await this.execute(async (provider) => {
+            const response = await provider.call({ to: call.target, data: call.callData });
+            return call.decode(response);
+          });
+          results.push(result);
+        } catch {
+          results.push(null as T);
+        }
+      }
+      return results;
+    }
+  }
 }
 
 // Singleton instance

@@ -7,6 +7,11 @@ import logger from '../utils/logger.js';
 
 // Secret key (should be from environment in production)
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+
+// Warn if JWT_SECRET is too short
+if (JWT_SECRET.length < 32) {
+  logger.warn('JWT_SECRET is less than 32 characters - consider using a longer secret for production');
+}
 const ACCESS_TOKEN_EXPIRY = '24h';
 const REFRESH_TOKEN_EXPIRY = '7d';
 
@@ -22,6 +27,7 @@ export interface AuthenticatedRequest extends Request {
 }
 
 // In-memory cache for fast lookup (synced with DB)
+const MAX_REFRESH_TOKENS = 1000; // Memory cap
 const refreshTokensCache = new Map<string, { userId: string; expiresAt: number }>();
 
 /**
@@ -85,6 +91,14 @@ export function generateRefreshToken(userId: string, sessionId: string): string 
   try {
     refreshTokenOps.store.run(tokenHash, userId, sessionId, Math.floor(expiresAt / 1000));
     refreshTokensCache.set(tokenHash, { userId, expiresAt });
+    // Enforce memory cap
+    if (refreshTokensCache.size > MAX_REFRESH_TOKENS) {
+      // Remove oldest entries
+      const entries = Array.from(refreshTokensCache.entries()).sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+      for (let i = 0; i < entries.length - MAX_REFRESH_TOKENS / 2; i++) {
+        refreshTokensCache.delete(entries[i][0]);
+      }
+    }
   } catch (error) {
     logger.error('Failed to persist refresh token:', { error: (error as Error).message });
   }

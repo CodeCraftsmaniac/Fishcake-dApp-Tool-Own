@@ -199,3 +199,18 @@ export function rateLimit<T extends (...args: unknown[]) => Promise<unknown>>(
     }) as T;
   };
 }
+
+// Endpoint-specific rate limit presets
+const ENDPOINT_LIMITS: Record<string, number> = {
+  sensitive: 5,    // start/stop/config/delete: 5 req/min
+  import: 3,       // wallet import: 3 req/min
+  default: 30,     // general: 30 req/min
+};
+
+/**
+ * Get rate limiter middleware for a specific endpoint category
+ */
+export function getRateLimiter(category: string = 'default'): (req: Request, res: Response, next: NextFunction) => void {
+  const limit = ENDPOINT_LIMITS[category] || ENDPOINT_LIMITS.default;
+  return rateLimitMiddleware(limit);
+}

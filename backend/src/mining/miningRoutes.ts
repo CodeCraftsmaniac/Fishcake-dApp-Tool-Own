@@ -1,7 +1,7 @@
 // Mining API Routes for Express backend
 import { Router, Request, Response } from 'express';
 import { ethers } from 'ethers';
-import { 
+import {
   miningScheduler,
   importWallets,
   getAllWallets,
@@ -14,6 +14,9 @@ import {
   MiningWallet,
   WalletImportResult,
 } from './index.js';
+import { db } from './database.js';
+import { authMiddleware, optionalAuthMiddleware } from './jwtAuth.js';
+import { getRateLimiter } from './rateLimiter.js';
 import { 
   getSmartProvider, 
   getAllRpcStatus, 
@@ -131,7 +134,7 @@ router.get('/status', (_req: Request, res: Response) => {
  * POST /api/mining/start
  * Start the automation scheduler
  */
-router.post('/start', (req: Request, res: Response) => {
+router.post('/start', getRateLimiter('sensitive'), authMiddleware, (req: Request, res: Response) => {
   try {
     const { passphrase } = req.body;
     
@@ -156,7 +159,7 @@ router.post('/start', (req: Request, res: Response) => {
  * POST /api/mining/stop
  * Stop the automation scheduler
  */
-router.post('/stop', (_req: Request, res: Response) => {
+router.post('/stop', getRateLimiter('sensitive'), authMiddleware, (_req: Request, res: Response) => {
   try {
     miningScheduler.stop();
     res.json({ success: true, message: 'Mining automation stopped' });
@@ -190,7 +193,7 @@ router.get('/config', (_req: Request, res: Response) => {
  * PUT /api/mining/config
  * Update mining configuration
  */
-router.put('/config', (req: Request, res: Response) => {
+router.put('/config', getRateLimiter('sensitive'), authMiddleware, (req: Request, res: Response) => {
   try {
     const { 
       recipientAddress1, 
@@ -297,7 +300,7 @@ router.get('/wallets', (_req: Request, res: Response) => {
  * POST /api/mining/wallets/import
  * Import wallets from private keys
  */
-router.post('/wallets/import', async (req: Request, res: Response) => {
+router.post('/wallets/import', getRateLimiter('sensitive'), authMiddleware, async (req: Request, res: Response) => {
   try {
     const { privateKeys, passphrase } = req.body;
 
@@ -422,7 +425,7 @@ router.get('/wallets/:address', (req: Request, res: Response) => {
  * DELETE /api/mining/wallets/:address
  * Remove a wallet
  */
-router.delete('/wallets/:address', (req: Request, res: Response) => {
+router.delete('/wallets/:address', getRateLimiter('sensitive'), authMiddleware, (req: Request, res: Response) => {
   try {
     const address = req.params.address as string;
     const deleted = deleteWalletFromMining(address);
@@ -671,6 +674,42 @@ router.get('/rpc/current', (_req: Request, res: Response) => {
   try {
     const current = getCurrentRpc();
     res.json({ success: true, data: current });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: (error as Error).message 
+    });
+  }
+});
+
+// ==================== METRICS ====================
+
+/**
+ * GET /api/mining/metrics
+ * Get aggregate metrics: events, FCC distributed, rewards, wallets, failures
+ */
+router.get('/metrics', (_req: Request, res: Response) => {
+  try {
+    const stats = getMiningStats();
+    const totalEvents = (db.prepare('SELECT COUNT(*) as count FROM mining_events').get() as { count: number }).count;
+    const totalFCC = (db.prepare("SELECT COALESCE(SUM(CAST(total_fcc_per_event AS REAL)), 0) as total FROM mining_events WHERE status = 'completed'").get() as { total: number }).total;
+    const totalRewards = (db.prepare("SELECT COALESCE(SUM(CAST(expected_mining_reward AS REAL)), 0) as total FROM mining_events WHERE status = 'completed'").get() as { total: number }).total;
+    const activeWallets = (db.prepare("SELECT COUNT(*) as count FROM mining_wallets WHERE status = 'active'").get() as { count: number }).count;
+    const failedEvents = (db.prepare("SELECT COUNT(*) as count FROM mining_events WHERE status = 'failed'").get() as { count: number }).count;
+    const completedDrops = (db.prepare("SELECT COALESCE(SUM(drop_count), 0) as total FROM mining_drops WHERE status = 'completed'").get() as { total: number }).total;
+
+    res.json({
+      success: true,
+      data: {
+        totalEvents,
+        totalFCCDistributed: totalFCC,
+        totalMiningRewards: totalRewards,
+        activeWallets,
+        failedEvents,
+        completedDrops,
+        schedulerStats: stats,
+      },
+    });
   } catch (error) {
     res.status(500).json({ 
       success: false, 

@@ -15,6 +15,44 @@ if (!fs.existsSync(dataDir)) {
 // Initialize database connection
 export const db: DatabaseType = new Database(DB_PATH);
 
+// DB write queue for handling busy/locked states
+const writeQueue: Array<{ fn: () => void; resolve: (value: unknown) => void; reject: (reason: Error) => void }> = [];
+let isProcessingQueue = false;
+
+export function queueWrite<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (error) {
+    if ((error as Error).message?.includes('locked') || (error as Error).message?.includes('BUSY')) {
+      // Queue for retry
+      logger.warn('DB locked, queuing write operation');
+      return new Promise<T>((resolve, reject) => {
+        writeQueue.push({ fn: () => fn(), resolve: resolve as (value: unknown) => void, reject });
+        processQueue();
+      }) as T;
+    }
+    throw error;
+  }
+}
+
+function processQueue(): void {
+  if (isProcessingQueue || writeQueue.length === 0) return;
+  isProcessingQueue = true;
+
+  const item = writeQueue.shift()!;
+  try {
+    const result = item.fn();
+    item.resolve(result);
+  } catch (error) {
+    item.reject(error as Error);
+  } finally {
+    isProcessingQueue = false;
+    if (writeQueue.length > 0) {
+      setTimeout(processQueue, 100);
+    }
+  }
+}
+
 // Enable WAL mode for better performance
 db.pragma('journal_mode = WAL');
 
