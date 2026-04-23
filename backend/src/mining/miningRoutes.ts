@@ -15,7 +15,7 @@ import {
   WalletImportResult,
 } from './index.js';
 import { db } from './database.js';
-import { authMiddleware, optionalAuthMiddleware } from './jwtAuth.js';
+import { authMiddleware, optionalAuthMiddleware, generateTokenPair, refreshAccessToken } from './jwtAuth.js';
 import { getRateLimiter } from './rateLimiter.js';
 import { 
   getSmartProvider, 
@@ -98,6 +98,62 @@ miningScheduler.on('wallet_complete', (wallet: MiningWallet) => {
 
 miningScheduler.on('wallet_error', ({ wallet, error }: { wallet: MiningWallet; error: Error }) => {
   broadcast('wallet_error', { address: wallet.address, error: error.message });
+});
+
+// ==================== AUTH ====================
+
+/**
+ * POST /api/mining/auth/login
+ * Authenticate and get JWT token pair
+ */
+router.post('/auth/login', getRateLimiter('sensitive'), (req: Request, res: Response) => {
+  try {
+    const { passphrase } = req.body;
+    if (!passphrase) {
+      return res.status(400).json({ success: false, error: 'Passphrase required' });
+    }
+
+    // Verify passphrase against stored hash in scheduler_state
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256').update(passphrase).digest('hex');
+    
+    const state = db.prepare('SELECT passphrase_hash FROM scheduler_state WHERE id = 1').get() as { passphrase_hash: string | null } | undefined;
+    
+    if (!state?.passphrase_hash) {
+      // No passphrase set yet - store this one as the initial passphrase
+      db.prepare('UPDATE scheduler_state SET passphrase_hash = ? WHERE id = 1').run(hash);
+    } else if (hash !== state.passphrase_hash) {
+      return res.status(401).json({ success: false, error: 'Invalid passphrase' });
+    }
+
+    const userId = 'admin';
+    const tokens = generateTokenPair(userId);
+    res.json({ success: true, data: tokens });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/mining/auth/refresh
+ * Refresh access token using refresh token
+ */
+router.post('/auth/refresh', (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, error: 'Refresh token required' });
+    }
+
+    const tokens = refreshAccessToken(refreshToken);
+    if (!tokens) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired refresh token' });
+    }
+
+    res.json({ success: true, data: tokens });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
 });
 
 // ==================== STATUS ====================
@@ -715,6 +771,187 @@ router.get('/metrics', (_req: Request, res: Response) => {
       success: false, 
       error: (error as Error).message 
     });
+  }
+});
+
+// ==================== ADDITIONAL ENDPOINTS ====================
+
+/**
+ * GET /api/mining/wallets/:address/balances
+ * Get live on-chain balances for a wallet
+ */
+router.get('/wallets/:address/balances', async (req: Request, res: Response) => {
+  try {
+    const address = req.params.address as string;
+    if (!ethers.isAddress(address)) {
+      return res.status(400).json({ success: false, error: 'Invalid address' });
+    }
+
+    const provider = await getProvider();
+    const fccContract = new ethers.Contract('0x84eBc138F4Ab844A3050a6059763D269dC9951c6', ['function balanceOf(address) view returns (uint256)'], provider);
+    const usdtContract = new ethers.Contract('0xc2132D05D31c914a87C6611C10748AEb04B58e8F', ['function balanceOf(address) view returns (uint256)'], provider);
+
+    const [fccBal, usdtBal, polBal] = await Promise.all([
+      fccContract.balanceOf(address),
+      usdtContract.balanceOf(address),
+      provider.getBalance(address),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        pol: ethers.formatEther(polBal),
+        fcc: ethers.formatUnits(fccBal, 6),
+        usdt: ethers.formatUnits(usdtBal, 6),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/mining/stats
+ * Alias for metrics endpoint (frontend compatibility)
+ */
+router.get('/stats', (_req: Request, res: Response) => {
+  try {
+    const stats = getMiningStats();
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/mining/stats/:address
+ * Alias for wallet stats (frontend compatibility)
+ */
+router.get('/stats/:address', (req: Request, res: Response) => {
+  try {
+    const address = req.params.address as string;
+    const wallet = getWalletByAddress(address);
+    if (!wallet) {
+      return res.status(404).json({ success: false, error: 'Wallet not found' });
+    }
+    const { getEventsByWallet } = require('./eventProcessor.js');
+    const events = getEventsByWallet(wallet.id);
+    const finishedEvents = events.filter((e: { status: string }) => e.status === 'FINISHED');
+    const totalMined = finishedEvents
+      .filter((e: { reward_received: string | null }) => e.reward_received)
+      .reduce((sum: number, e: { reward_received: string }) => sum + parseFloat(e.reward_received || '0'), 0);
+
+    res.json({
+      success: true,
+      data: {
+        totalEvents: events.length,
+        ongoingEvents: events.filter((e: { status: string }) => !['FINISHED', 'FAILED', 'TIMEOUT'].includes(e.status)).length,
+        finishedEvents: finishedEvents.length,
+        totalFccMined: totalMined.toFixed(2),
+        miningDays: new Set(finishedEvents.filter((e: { finished_at: number | null }) => e.finished_at).map((e: { finished_at: number }) => new Date(e.finished_at * 1000).toDateString())).size,
+        passExpiry: wallet.nft_expiry_at ? new Date(wallet.nft_expiry_at * 1000).toISOString() : null,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/mining/workflows
+ * Get workflow status for all wallets (derived from events)
+ */
+router.get('/workflows', (_req: Request, res: Response) => {
+  try {
+    const events = getRecentEvents(100);
+    const workflows = events.map((e) => ({
+      walletAddress: e.wallet_id,
+      eventId: e.id,
+      status: e.status,
+      steps: [
+        { name: 'Create Event', status: e.status === 'PENDING' ? 'running' : 'completed' },
+        { name: 'Drop 1', status: e.status === 'DROP1' ? 'running' : e.status === 'FAILED' ? 'failed' : 'completed' },
+        { name: 'Drop 2', status: e.status === 'DROP2' ? 'running' : ['FAILED', 'PARTIAL'].includes(e.status) ? 'failed' : 'completed' },
+        { name: 'Monitor Reward', status: e.status === 'MONITORING' ? 'running' : 'completed' },
+        { name: 'Finish', status: e.status === 'FINISHED' ? 'completed' : 'pending' },
+      ],
+    }));
+    res.json({ success: true, data: workflows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/mining/workflows/:address
+ * Get workflow for specific wallet
+ */
+router.get('/workflows/:address', (req: Request, res: Response) => {
+  try {
+    const address = req.params.address as string;
+    const wallet = getWalletByAddress(address);
+    if (!wallet) {
+      return res.status(404).json({ success: false, error: 'Wallet not found' });
+    }
+    const { getEventsByWallet } = require('./eventProcessor.js');
+    const events = getEventsByWallet(wallet.id);
+    const latest = events[events.length - 1];
+    if (!latest) {
+      return res.json({ success: true, data: { walletAddress: address, steps: [] } });
+    }
+    res.json({
+      success: true,
+      data: {
+        walletAddress: address,
+        eventId: latest.id,
+        status: latest.status,
+        steps: [
+          { name: 'Create Event', status: 'completed' },
+          { name: 'Drop 1', status: latest.status === 'FAILED' ? 'failed' : 'completed' },
+          { name: 'Drop 2', status: ['FAILED', 'PARTIAL'].includes(latest.status) ? 'failed' : 'completed' },
+          { name: 'Monitor Reward', status: latest.status === 'MONITORING' ? 'running' : 'completed' },
+          { name: 'Finish', status: latest.status === 'FINISHED' ? 'completed' : 'pending' },
+        ],
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/mining/rpc/switch
+ * Switch to a specific RPC endpoint
+ */
+router.post('/rpc/switch', getRateLimiter('sensitive'), authMiddleware, (req: Request, res: Response) => {
+  try {
+    const { rpcUrl } = req.body;
+    if (!rpcUrl || typeof rpcUrl !== 'string') {
+      return res.status(400).json({ success: false, error: 'RPC URL required' });
+    }
+    miningScheduler.setRpcUrl(rpcUrl);
+    res.json({ success: true, data: { currentRpc: rpcUrl } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/mining/events/wallet/:address
+ * Alias for wallet events (frontend compatibility)
+ */
+router.get('/events/wallet/:address', (req: Request, res: Response) => {
+  try {
+    const address = req.params.address as string;
+    const wallet = getWalletByAddress(address);
+    if (!wallet) {
+      return res.status(404).json({ success: false, error: 'Wallet not found' });
+    }
+    const { getEventsByWallet } = require('./eventProcessor.js');
+    const events = getEventsByWallet(wallet.id);
+    res.json({ success: true, data: events });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 

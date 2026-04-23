@@ -5,8 +5,48 @@
  */
 
 // API Base URL - MUST be set via environment variable in production
-// In production: Set NEXT_PUBLIC_API_URL to your Oracle VM backend URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+// JWT Token Management
+let accessToken: string | null = null;
+let refreshToken: string | null = null;
+
+function setTokens(access: string, refresh: string): void {
+  accessToken = access;
+  refreshToken = refresh;
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('fcc_access_token', access);
+    localStorage.setItem('fcc_refresh_token', refresh);
+  }
+}
+
+function clearTokens(): void {
+  accessToken = null;
+  refreshToken = null;
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('fcc_access_token');
+    localStorage.removeItem('fcc_refresh_token');
+  }
+}
+
+function loadTokens(): void {
+  if (typeof window !== 'undefined') {
+    accessToken = localStorage.getItem('fcc_access_token');
+    refreshToken = localStorage.getItem('fcc_refresh_token');
+  }
+}
+
+function getAuthHeaders(): Record<string, string> {
+  if (accessToken) {
+    return { Authorization: `Bearer ${accessToken}` };
+  }
+  return {};
+}
+
+// Load tokens on module init
+if (typeof window !== 'undefined') {
+  loadTokens();
+}
 
 interface ApiResponse<T> {
   success: boolean;
@@ -81,29 +121,42 @@ interface HealthStatus {
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<ApiResponse<T>> {
   try {
     const url = `${API_BASE_URL}${endpoint}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    });
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+      ...(options?.headers as Record<string, string> || {}),
+    };
+
+    let response = await fetch(url, { ...options, headers });
+
+    // Auto-refresh on 401
+    if (response.status === 401 && refreshToken) {
+      const refreshRes = await fetch(`${API_BASE_URL}/api/mining/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json();
+        if (refreshData.success && refreshData.data) {
+          setTokens(refreshData.data.accessToken, refreshData.data.refreshToken);
+          headers['Authorization'] = `Bearer ${refreshData.data.accessToken}`;
+          response = await fetch(url, { ...options, headers });
+        }
+      } else {
+        clearTokens();
+      }
+    }
 
     const data = await response.json();
     
     if (!response.ok) {
-      return {
-        success: false,
-        error: data.error || `HTTP ${response.status}`,
-      };
+      return { success: false, error: data.error || `HTTP ${response.status}` };
     }
 
     return data;
   } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Network error',
-    };
+    return { success: false, error: error instanceof Error ? error.message : 'Network error' };
   }
 }
 
@@ -270,18 +323,22 @@ export const configApi = {
   // Get config
   get: () => 
     apiFetch<{
-      autoStart: boolean;
-      dailyDelay: number;
-      fccPerDrop: number;
-      dropsPerAddress: number;
+      recipient_address_1: string;
+      recipient_address_2: string;
+      fcc_per_recipient: string;
+      total_fcc_per_event: string;
+      expected_mining_reward: string;
+      offset_minutes: number;
+      scheduler_enabled: number;
+      max_concurrent_wallets: number;
     }>('/api/mining/config'),
 
   // Update config
   update: (config: Partial<{
-    autoStart: boolean;
-    dailyDelay: number;
-    fccPerDrop: number;
-    dropsPerAddress: number;
+    recipientAddress1: string;
+    recipientAddress2: string;
+    fccPerRecipient: string;
+    offsetMinutes: number;
   }>) => 
     apiFetch<{ success: boolean }>(
       '/api/mining/config',
@@ -290,6 +347,62 @@ export const configApi = {
         body: JSON.stringify(config),
       }
     ),
+};
+
+/**
+ * Auth APIs
+ */
+export const authApi = {
+  // Login with passphrase to get JWT tokens
+  login: (passphrase: string) =>
+    apiFetch<{
+      accessToken: string;
+      refreshToken: string;
+      expiresIn: number;
+    }>(
+      '/api/mining/auth/login',
+      {
+        method: 'POST',
+        body: JSON.stringify({ passphrase }),
+      }
+    ),
+
+  // Refresh tokens
+  refresh: (refreshToken: string) =>
+    apiFetch<{
+      accessToken: string;
+      refreshToken: string;
+      expiresIn: number;
+    }>(
+      '/api/mining/auth/refresh',
+      {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      }
+    ),
+
+  // Logout (clear local tokens)
+  logout: () => {
+    clearTokens();
+  },
+
+  // Check if authenticated
+  isAuthenticated: () => !!accessToken,
+};
+
+/**
+ * Metrics APIs
+ */
+export const metricsApi = {
+  // Get aggregate metrics
+  get: () => apiFetch<{
+    totalEvents: number;
+    totalFCCDistributed: number;
+    totalMiningRewards: number;
+    activeWallets: number;
+    failedEvents: number;
+    completedDrops: number;
+  }>('/api/mining/metrics'),
 };
 
 // Export API base URL for debugging

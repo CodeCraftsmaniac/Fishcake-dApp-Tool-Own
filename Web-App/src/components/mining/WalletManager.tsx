@@ -27,24 +27,9 @@ import {
 import { ethers } from 'ethers';
 import { cn } from '@/lib/utils';
 
-// Contract addresses
-const CONTRACTS = {
-  FCC_TOKEN: '0x84eBc138F4Ab844A3050a6059763D269dC9951c6',
-  USDT_TOKEN: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
-  NFT_MANAGER: '0x2F2Cb24BaB1b6E2353EF6246a2Ea4ce50487008B',
-};
-
-const ERC20_ABI = [
-  'function balanceOf(address) view returns (uint256)',
-];
-
-const NFT_ABI = [
-  'function getMerchantNFT(address) view returns (uint256 tokenId, uint8 nftType, uint256 mintedAt, uint256 expiredAt, bool isValid)',
-];
-
 interface ImportStatus {
   address: string;
-  step: 'validating' | 'fetching_balances' | 'fetching_nft' | 'completed' | 'failed';
+  step: 'validating' | 'importing' | 'fetching_balances' | 'completed' | 'failed';
   message: string;
   error?: string;
 }
@@ -60,52 +45,13 @@ export function WalletManager() {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get provider - use working public RPC
-  const getProvider = useCallback(() => {
-    return new ethers.JsonRpcProvider('https://polygon-bor-rpc.publicnode.com', {
-      name: 'polygon',
-      chainId: 137,
-    }, {
-      staticNetwork: true
-    });
-  }, []);
-
-  // Fetch balances for a wallet
-  const fetchBalances = async (address: string, provider: ethers.JsonRpcProvider) => {
-    const fcc = new ethers.Contract(CONTRACTS.FCC_TOKEN, ERC20_ABI, provider);
-    const usdt = new ethers.Contract(CONTRACTS.USDT_TOKEN, ERC20_ABI, provider);
-
-    const [fccBalance, usdtBalance, polBalance] = await Promise.all([
-      fcc.balanceOf(address),
-      usdt.balanceOf(address),
-      provider.getBalance(address),
-    ]);
-
-    return {
-      fcc: ethers.formatUnits(fccBalance, 6),
-      usdt: ethers.formatUnits(usdtBalance, 6),
-      pol: ethers.formatEther(polBalance),
-    };
-  };
-
-  // Fetch NFT info for a wallet
-  const fetchNftInfo = async (address: string, provider: ethers.JsonRpcProvider) => {
-    try {
-      const nftManager = new ethers.Contract(CONTRACTS.NFT_MANAGER, NFT_ABI, provider);
-      const nftInfo = await nftManager.getMerchantNFT(address);
-      
-      const nftType = nftInfo.nftType === 1 ? 'PRO' : nftInfo.nftType === 2 ? 'BASIC' : 'NONE';
-      const isValid = nftInfo.isValid;
-      const expiry = Number(nftInfo.expiredAt) * 1000; // Convert to ms
-
-      return {
-        nftType: isValid ? nftType : 'NONE',
-        nftExpiry: isValid ? expiry : null,
-        nftTokenId: isValid ? Number(nftInfo.tokenId) : null,
-      };
-    } catch {
-      return { nftType: 'NONE' as const, nftExpiry: null, nftTokenId: null };
+  // Fetch balances via backend API
+  const fetchBalances = async (address: string) => {
+    const result = await walletApi.balances(address);
+    if (result.success && result.data) {
+      return result.data;
     }
+    return { pol: '0', fcc: '0', usdt: '0' };
   };
 
   // Update import status
@@ -136,7 +82,6 @@ export function WalletManager() {
 
     // Initialize import statuses
     const initialStatuses: ImportStatus[] = [];
-    const provider = getProvider();
 
     for (const key of keys) {
       try {
@@ -205,24 +150,15 @@ export function WalletManager() {
           message: 'Fetching balances...',
         });
 
-        const balances = await fetchBalances(wallet.address, provider);
-
-        // Fetch NFT info
-        updateImportStatus(wallet.address, {
-          step: 'fetching_nft',
-          message: 'Fetching NFT pass info...',
-        });
-
-        const nftInfo = await fetchNftInfo(wallet.address, provider);
+        const balances = await fetchBalances(wallet.address);
 
         // Add wallet to local store (without encrypted key - backend is source of truth)
         addWallet({
           address: wallet.address,
-          // Note: encrypted keys are ONLY stored on the backend, not in browser localStorage
           status: 'active',
-          nftType: nftInfo.nftType as 'NONE' | 'BASIC' | 'PRO',
-          nftExpiry: nftInfo.nftExpiry,
-          nftTokenId: nftInfo.nftTokenId,
+          nftType: 'NONE',
+          nftExpiry: null,
+          nftTokenId: null,
           firstMiningDate: null,
           failureCount: 0,
           lastEventId: null,
@@ -319,18 +255,12 @@ export function WalletManager() {
 
   // Refresh all balances
   const handleRefreshAllBalances = async () => {
-    const provider = getProvider();
-    
     for (const wallet of wallets) {
       try {
-        const balances = await fetchBalances(wallet.address, provider);
-        const nftInfo = await fetchNftInfo(wallet.address, provider);
+        const balances = await fetchBalances(wallet.address);
         
         updateWallet(wallet.id, {
           balances,
-          nftType: nftInfo.nftType as 'NONE' | 'BASIC' | 'PRO',
-          nftExpiry: nftInfo.nftExpiry,
-          nftTokenId: nftInfo.nftTokenId,
         });
       } catch (error) {
         console.error(`Failed to refresh ${wallet.address}:`, error);
