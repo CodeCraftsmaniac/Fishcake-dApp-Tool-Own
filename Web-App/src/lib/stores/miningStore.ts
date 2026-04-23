@@ -1,6 +1,7 @@
 // Mining Automation Store - Zustand state management
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 
 export type WorkflowNodeStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
@@ -567,3 +568,6 @@ export const useMiningStore = create<MiningStore>()(
     }
   )
 );
+
+// Re-export useShallow for optimized selector usage in components
+export { useShallow };

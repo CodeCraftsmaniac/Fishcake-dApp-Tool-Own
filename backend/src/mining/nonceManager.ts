@@ -141,7 +141,7 @@ class NonceManager {
     this.nonces.clear();
     try {
       nonceOps.clearAll.run();
-    } catch {}
+    } catch { /* ignore clear error */ }
   }
 
   /**

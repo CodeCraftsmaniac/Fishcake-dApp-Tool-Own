@@ -115,6 +115,7 @@ export function truncateText(text: string, maxLength: number): string {
 }
 
 export function sanitizeInput(input: string): string {
+    // eslint-disable-next-line no-control-regex
     return input.trim().replace(/[\x00-\x1F\x7F]/g, "");
 }
 

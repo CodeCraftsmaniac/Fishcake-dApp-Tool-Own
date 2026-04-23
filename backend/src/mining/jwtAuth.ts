@@ -156,7 +156,7 @@ export function verifyRefreshToken(token: string): TokenPayload | null {
       const dbRow = refreshTokenOps.getByHash.get(tokenHash) as any;
       if (!dbRow || dbRow.expires_at * 1000 < Date.now()) {
         // Clean up expired
-        try { refreshTokenOps.deleteByHash.run(tokenHash); } catch {}
+        try { refreshTokenOps.deleteByHash.run(tokenHash); } catch { /* ignore delete error */ }
         refreshTokensCache.delete(tokenHash);
         return null;
       }
@@ -206,7 +206,7 @@ export function revokeRefreshToken(token: string): boolean {
   const tokenHash = hashToken(token);
   try {
     refreshTokenOps.deleteByHash.run(tokenHash);
-  } catch {}
+  } catch { /* ignore delete error */ }
   return refreshTokensCache.delete(tokenHash);
 }
 

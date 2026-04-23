@@ -96,7 +96,7 @@ export async function fetchGasPrice(): Promise<string> {
             const feeData = await getGasPrice();
             const gwei = Number(feeData) / 1e9;
             return gwei.toFixed(2);
-        } catch { }
+        } catch { /* ignore fee fetch error */ }
         return "-.--";
     }
 }

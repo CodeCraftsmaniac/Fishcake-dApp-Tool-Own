@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { cn } from '@/lib/utils';
 import { healthApi, rpcApi, miningApi } from '@/lib/api/backendClient';
 import {
@@ -48,7 +48,7 @@ interface SystemStatus {
   };
 }
 
-export default function StatusSidebar() {
+export default memo(function StatusSidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -328,4 +328,4 @@ export default function StatusSidebar() {
       </div>
     </>
   );
-}
+});
