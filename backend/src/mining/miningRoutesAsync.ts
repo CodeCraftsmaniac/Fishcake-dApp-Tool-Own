@@ -208,13 +208,21 @@ router.put('/config', async (req: Request, res: Response) => {
 
     // Update amounts
     if (fccPerRecipient) {
-      const totalFcc = (parseFloat(fccPerRecipient) * 2).toString();
-      const reward = (parseFloat(fccPerRecipient) * 2 * 0.25).toString();
+      const parsed = parseFloat(fccPerRecipient);
+      if (isNaN(parsed) || parsed <= 0 || parsed > 1000000) {
+        return res.status(400).json({ success: false, error: 'FCC per recipient must be between 0 and 1,000,000' });
+      }
+      const totalFcc = (parsed * 2).toString();
+      const reward = (parsed * 2 * 0.25).toString();
       await configOps.updateAmounts(fccPerRecipient, totalFcc, reward);
     }
 
     // Update scheduler settings
     if (offsetMinutes !== undefined) {
+      const parsed = parseInt(offsetMinutes, 10);
+      if (isNaN(parsed) || parsed < 0 || parsed > 1440) {
+        return res.status(400).json({ success: false, error: 'Offset minutes must be between 0 and 1440' });
+      }
       const current = await configOps.get();
       await configOps.updateScheduler(
         current.scheduler_enabled ? 1 : 0,  // Convert boolean to number

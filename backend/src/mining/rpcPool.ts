@@ -11,11 +11,11 @@ interface RpcEndpoint {
 }
 
 const DEFAULT_ENDPOINTS = [
-  { url: 'https://polygon-rpc.com', priority: 1 },
-  { url: 'https://rpc-mainnet.matic.network', priority: 2 },
-  { url: 'https://polygon-mainnet.public.blastapi.io', priority: 3 },
-  { url: 'https://polygon.llamarpc.com', priority: 4 },
-  { url: 'https://polygon-bor-rpc.publicnode.com', priority: 5 },
+  { url: 'https://polygon-rpc.com', priority: 2 },
+  { url: 'https://rpc-mainnet.matic.network', priority: 3 },
+  { url: 'https://polygon-mainnet.public.blastapi.io', priority: 4 },
+  { url: 'https://polygon.llamarpc.com', priority: 5 },
+  { url: 'https://polygon-bor-rpc.publicnode.com', priority: 6 },
 ];
 
 const FAILURE_COOLDOWN_MS = 60000; // 1 minute
@@ -26,8 +26,22 @@ class RpcPool {
   private providers: Map<string, ethers.JsonRpcProvider> = new Map();
   private currentProvider: ethers.JsonRpcProvider | null = null;
   private currentUrl: string | null = null;
+  private balanceCache: Map<string, { balance: string; timestamp: number }> = new Map();
+  private readonly BALANCE_CACHE_TTL = 10000; // 10 seconds
 
   constructor() {
+    // Primary RPC from env var (highest priority)
+    const primaryRpc = process.env.RPC_ALCHEMY || process.env.RPC_PRIMARY;
+    if (primaryRpc) {
+      this.endpoints.set(primaryRpc, {
+        url: primaryRpc,
+        priority: 1,
+        failures: 0,
+        lastFailure: 0,
+        responseTimeMs: 0,
+      });
+    }
+
     // Initialize with default endpoints
     for (const ep of DEFAULT_ENDPOINTS) {
       this.endpoints.set(ep.url, {
@@ -144,6 +158,11 @@ class RpcPool {
         return result;
       } catch (error) {
         lastError = error as Error;
+        // Don't retry on transaction reverts (permanent failure)
+        const msg = lastError.message || '';
+        if (msg.includes('revert') || msg.includes('REVERT') || msg.includes('execution reverted')) {
+          throw lastError;
+        }
         this.reportFailure(lastError);
       }
     }
@@ -210,6 +229,23 @@ class RpcPool {
     }
     this.currentProvider = null;
     this.currentUrl = null;
+  }
+
+  /**
+   * Get balance with 10-second cache to reduce RPC calls
+   */
+  async getBalance(address: string): Promise<string> {
+    const cached = this.balanceCache.get(address);
+    if (cached && Date.now() - cached.timestamp < this.BALANCE_CACHE_TTL) {
+      return cached.balance;
+    }
+
+    const balance = await this.execute(async (provider) => {
+      return (await provider.getBalance(address)).toString();
+    });
+
+    this.balanceCache.set(address, { balance, timestamp: Date.now() });
+    return balance;
   }
 }
 

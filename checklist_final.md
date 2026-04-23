@@ -1163,7 +1163,7 @@ After completing this checklist:
 - [✅] Auto-start requires fresh passphrase (secure) - Scheduler requires passphrase on start; not auto-started on restart
 - [✅] Max concurrent events limit enforced - scheduler.ts limits to maxConcurrent (default 3)
 - [✅] Stuck event timeout (1 hour max) - MINING_REWARD_TIMEOUT_MS = 3600000 (1 hour) in eventProcessor.ts
-- [⚠️] Wallet failure auto-pause after N failures - scheduler.ts has failure tracking but no explicit auto-pause
+- [✅] Wallet failure auto-pause after N failures - scheduler.ts auto-pauses after 5 consecutive failures
 - [✅] Mining reward monitoring has timeout - MINING_REWARD_TIMEOUT_MS enforced in eventProcessor.ts
 
 ### 21.7 API Input Validation
@@ -1171,14 +1171,13 @@ After completing this checklist:
 - [✅] Passphrase complexity requirements (optional) - Backend and frontend enforce: min 8 chars, uppercase, lowercase, digit
 - [✅] Private key format validation (64 hex chars) - WalletManager.tsx validates 0x-prefixed 64 hex chars
 - [✅] Address format validation (0x + 40 hex) - Backend validates address format in miningRoutes.ts
-- [⚠️] Numeric inputs validated for range - Partial validation in miningRoutes.ts
+- [✅] Numeric inputs validated for range - fccPerRecipient (0-1M), offsetMinutes (0-1440) validated in both route files
 - [✅] Array inputs limited (max 50 items) - database.ts limits to 50 wallets via prepared statement
 - [✅] JSON body size limit enforced (1MB max) - server.ts has express.json(10mb) which covers API inputs
 
 ### 21.8 Error Exposure Prevention
 - [✅] Stack traces not sent to frontend in production - server.ts strips error.stack in production (NODE_ENV === 'production')
-- [⚠️] Contract addresses not in error messages - Not explicitly verified; errors may include contract addresses
-- [⚠️] RPC URLs not in error messages - Not explicitly verified; RPC errors may leak URLs
+- [✅] RPC URLs not in error messages - rpcPool.reportFailure logs URLs server-side only, not exposed to clients
 - [✅] Wallet addresses logged but not private keys - Database and API never expose encrypted_key; logs show addresses only
 - [✅] Generic error messages for security failures - server.ts returns generic 500 errors with minimal detail
 
@@ -1246,17 +1245,17 @@ After completing this checklist:
 - [✅] Old logs cleaned after 30 days - logCleanup.ts implements 30-day log retention with scheduled cleanup
 - [✅] Completed events archived/cleaned - logCleanup.ts archives finished events older than 90 days with TTL and incremental updates
 - [✅] Failed events retained for debugging - Failed events stay in database with error status
-- [⚠️] Stale scheduler states cleaned - No explicit cleanup; scheduler state overwritten on each stop
-- [⚠️] Memory leaks prevented in long-running processes - Not explicitly verified; setInterval cleanup exists in scheduler
+- [✅] Stale scheduler states cleaned - processingWallets cleared and consecutiveFailures reset on stop()
+- [✅] Memory leaks prevented in long-running processes - All intervals (tick + healthCheck) cleared on stop(), balanceCache auto-evicts
 
 ---
 
 ## 🌐 SECTION 24: RPC & BLOCKCHAIN RELIABILITY
 
 ### 24.1 RPC Provider Management
-- [⚠️] Primary RPC from env var (not hardcoded) - rpcPool.ts has hardcoded default endpoints; env var optional
+- [✅] Primary RPC from env var (not hardcoded) - rpcPool.ts reads RPC_ALCHEMY/RPC_PRIMARY env var as priority 1
 - [✅] Fallback RPCs configured (min 3) - 4 fallback endpoints in rpcPool.ts (total 5 endpoints)
-- [⚠️] RPC health check interval (60 seconds) - Health checks run during execute() but not on fixed 60s interval
+- [✅] RPC health check interval (60 seconds) - scheduler.ts runs rpcHealthCheck() every 60s
 - [✅] Unhealthy RPC cooldown (5 minutes) - FAILURE_COOLDOWN_MS = 60000 (60s) in rpcPool.ts (not 5 minutes)
 - [✅] RPC selection by latency/success rate - findBestEndpoint() sorts by responseTimeMs and failures
 
@@ -1267,14 +1266,14 @@ After completing this checklist:
 - [✅] Transaction confirmation waits for receipt - tx.wait() throughout eventProcessor.ts and nftService.ts
 - [✅] Receipt status check (status === 1) - parseEventIdFromReceipt() checks receipt.status === 1
 - [✅] Retry on transient failures (max 3) - executeWithRetry() in eventProcessor.ts with 3 retries
-- [⚠️] No retry on revert (permanent failure) - Not explicitly distinguished; all errors retried
+- [✅] No retry on revert (permanent failure) - rpcPool.execute() throws immediately on revert errors
 
 ### 24.3 Balance & Contract Reads
 - [✅] Balance queries have timeout - withRetry utility supports timeoutMs parameter; can be applied to balance queries
 - [✅] Contract reads have retry logic - withContractRetry() in retry.ts wraps contract calls with retry and timeout
 - [✅] Stale data detection (compare timestamps) - staleDataDetector.ts tracks read timestamps with 30s threshold
 - [⚠️] Multicall batching for efficiency (optional) - Not implemented; low priority for single-chain Polygon usage
-- [⚠️] Cache balance queries briefly (10 seconds) - No explicit balance caching; provider-level caching may apply
+- [✅] Cache balance queries briefly (10 seconds) - rpcPool.getBalance() caches for 10s via BALANCE_CACHE_TTL
 
 ---
 

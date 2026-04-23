@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { configOps, logOps, schedulerOps } from './database.js';
 import { getReadyWallets, MiningWallet } from './walletService.js';
 import { processWallet, MiningConfig } from './eventProcessor.js';
+import { rpcPool } from './rpcPool.js';
 import logger from '../utils/logger.js';
 
 interface SchedulerState {
@@ -19,9 +20,12 @@ interface SchedulerState {
 export class MiningScheduler extends EventEmitter {
   private isRunning = false;
   private intervalId: NodeJS.Timeout | null = null;
+  private healthCheckId: NodeJS.Timeout | null = null;
   private provider: ethers.JsonRpcProvider;
   private passphrase: string = '';
   private processingWallets = new Set<number>();
+  private consecutiveFailures = 0;
+  private readonly MAX_CONSECUTIVE_FAILURES = 5;
 
   constructor(rpcUrl: string = 'https://polygon-bor-rpc.publicnode.com') {
     super();
@@ -108,6 +112,9 @@ export class MiningScheduler extends EventEmitter {
     // Run every minute
     this.intervalId = setInterval(() => this.tick(), 60000);
 
+    // RPC health check every 60 seconds
+    this.healthCheckId = setInterval(() => this.rpcHealthCheck(), 60000);
+
     // Initial tick
     this.tick();
   }
@@ -125,6 +132,15 @@ export class MiningScheduler extends EventEmitter {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
+
+    if (this.healthCheckId) {
+      clearInterval(this.healthCheckId);
+      this.healthCheckId = null;
+    }
+
+    // Clean up stale processing wallets on stop
+    this.processingWallets.clear();
+    this.consecutiveFailures = 0;
 
     // Update config
     configOps.updateScheduler.run({
@@ -226,17 +242,25 @@ export class MiningScheduler extends EventEmitter {
     try {
       await processWallet(wallet, this.passphrase, this.provider);
       
+      this.consecutiveFailures = 0; // Reset on success
       this.emit('wallet_complete', wallet);
       this.emit('log', { 
         level: 'success', 
         message: `Completed wallet ${wallet.address.slice(0, 8)}...${wallet.address.slice(-6)}` 
       });
     } catch (error) {
+      this.consecutiveFailures++;
       this.emit('wallet_error', { wallet, error });
       this.emit('log', { 
         level: 'error', 
         message: `Error processing ${wallet.address.slice(0, 8)}...: ${(error as Error).message}` 
       });
+
+      // Auto-pause after too many consecutive failures
+      if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+        this.emit('log', { level: 'warn', message: `Auto-pausing: ${this.consecutiveFailures} consecutive failures` });
+        this.stop();
+      }
     } finally {
       this.processingWallets.delete(wallet.id);
       
@@ -244,6 +268,20 @@ export class MiningScheduler extends EventEmitter {
       schedulerOps.updateTick.run({
         processing_wallets: JSON.stringify([...this.processingWallets]),
       });
+    }
+  }
+
+  /**
+   * Periodic RPC health check
+   */
+  private async rpcHealthCheck(): Promise<void> {
+    try {
+      const provider = rpcPool.getProvider();
+      const start = Date.now();
+      await provider.getBlockNumber();
+      rpcPool.reportSuccess(Date.now() - start);
+    } catch {
+      rpcPool.reportFailure();
     }
   }
 
