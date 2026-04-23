@@ -656,7 +656,7 @@ VERCEL_TOKEN
 - [✅] SSH access working: `ssh -i ~/.ssh/oracle_fcc_bot_v3 opc@129.80.144.145` - Port 22 reachable from local machine
 - [✅] Node.js 20 LTS installed via nvm - ORACLE_VM_SETUP.md documents installation
 - [✅] PM2 process manager installed globally - ORACLE_VM_SETUP.md documents PM2 setup
-- [⚠️] Nginx reverse proxy configured (optional) - Not documented
+- [✅] Nginx reverse proxy configured (optional) - ORACLE_VM_SETUP.md includes Nginx config with SSE support and Let's Encrypt
 - [✅] Git repository cloned to ~/fishcake-backend - ORACLE_VM_SETUP.md documents clone path
 - [✅] Environment variables set in .env - .env.example has all required vars:
   - [✅] `PORT=3001`
@@ -883,7 +883,7 @@ VERCEL_TOKEN
 - [✅] SSE doesn't leak connections - MAX_SSE_CONNECTIONS=50 enforced with eviction; res.on('close') cleanup; periodic stale sweep
 
 ### 13.3 Frontend Performance
-- [⚠️] Bundle size reasonable - Main chunk 101KB JS, but some components are large (WorkflowCanvas 31KB)
+- [✅] Bundle size reasonable - Main chunk 101KB JS; WorkflowCanvas lazy-loaded via dynamic import
 - [✅] Lazy loading components - Next.js dynamic imports used for heavy components (WorkflowCanvas)
 - [✅] Memoization where needed - React.memo applied to StatusSidebar, WalletManager; useMemo for expensive computations
 - [✅] No unnecessary re-renders - Zustand selectors use shallow equality via useShallow in miningStore
