@@ -44,6 +44,8 @@
     "dev": "tsx watch src/serverSupabase.ts",
     "dev:sqlite": "tsx watch src/server.ts",
     "server": "node dist/serverSupabase.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
@@ -71,7 +73,8 @@
     "@types/pg": "^8.20.0",
     "rimraf": "^5.0.5",
     "tsx": "^4.20.3",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.5"
   },
   "engines": {
     "node": ">=20.0.0"

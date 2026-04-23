@@ -7,6 +7,7 @@ import pg from 'pg';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import logger from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,7 +20,7 @@ async function migrate() {
   
   try {
     await client.connect();
-    console.log('✅ Connected to Supabase PostgreSQL');
+    logger.info('✅ Connected to Supabase PostgreSQL');
     
     const sqlPath = path.join(__dirname, 'migration.sql');
     const sql = fs.readFileSync(sqlPath, 'utf-8');
@@ -30,7 +31,7 @@ async function migrate() {
       .map(s => s.trim())
       .filter(s => s.length > 0 && !s.startsWith('--'));
     
-    console.log(`📝 Found ${statements.length} SQL statements to execute\n`);
+    logger.info(`📝 Found ${statements.length} SQL statements to execute\n`);
     
     let success = 0;
     let skipped = 0;
@@ -45,10 +46,10 @@ async function migrate() {
           // Only log table/index creation
           if (stmt.toLowerCase().includes('create table')) {
             const match = stmt.match(/create table if not exists (\w+)/i);
-            console.log(`✓ Created table: ${match?.[1] || 'unknown'}`);
+            logger.info(`✓ Created table: ${match?.[1] || 'unknown'}`);
           } else if (stmt.toLowerCase().includes('create index')) {
             const match = stmt.match(/create index if not exists (\w+)/i);
-            console.log(`✓ Created index: ${match?.[1] || 'unknown'}`);
+            logger.info(`✓ Created index: ${match?.[1] || 'unknown'}`);
           }
         } catch (err: unknown) {
           const error = err as { message?: string };
@@ -58,21 +59,21 @@ async function migrate() {
             skipped++;
           } else {
             errors++;
-            console.log(`✗ Error: ${error.message}`);
+            logger.info(`✗ Error: ${error.message}`);
           }
         }
       }
     }
     
-    console.log(`\n📊 Migration Summary:`);
-    console.log(`   ✓ Success: ${success}`);
-    console.log(`   ○ Skipped: ${skipped}`);
-    console.log(`   ✗ Errors: ${errors}`);
-    console.log('\n✅ Migration complete!');
+    logger.info(`\n📊 Migration Summary:`);
+    logger.info(`   ✓ Success: ${success}`);
+    logger.info(`   ○ Skipped: ${skipped}`);
+    logger.info(`   ✗ Errors: ${errors}`);
+    logger.info('\n✅ Migration complete!');
     
   } catch (err: unknown) {
     const error = err as { message?: string };
-    console.error('❌ Connection error:', error.message);
+    logger.error('Connection error:', { error: error.message });
     process.exit(1);
   } finally {
     await client.end();

@@ -19,6 +19,7 @@ import miningRoutes from './mining/miningRoutes.js';
 import { miningScheduler } from './mining/scheduler.js';
 import { getAllRpcStatus, getCurrentRpc } from './blockchain/rpcManager.js';
 import { BACKEND_VERSION } from './index.js';
+import logger from './utils/logger.js';
 
 // Environment configuration
 const PORT = process.env.PORT || 3001;
@@ -71,7 +72,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
+    logger.info(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
   });
   next();
 });
@@ -136,8 +137,7 @@ app.use((req: Request, res: Response) => {
 
 // Global error handler
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
-  console.error(`[ERROR] ${err.message}`);
-  console.error(err.stack);
+  logger.error(`Unhandled error: ${err.message}`, { stack: err.stack });
   
   res.status(500).json({
     success: false,
@@ -148,45 +148,45 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
 // Initialize and start server
 async function startServer() {
   try {
-    console.log('🐠 Fishcake Backend Server Starting...');
-    console.log(`📍 Environment: ${NODE_ENV}`);
-    console.log(`🔌 Port: ${PORT}`);
+    logger.info('Fishcake Backend Server Starting...');
+    logger.info(`Environment: ${NODE_ENV}`);
+    logger.info(`Port: ${PORT}`);
     
     // Initialize database
-    console.log('📦 Initializing database...');
+    logger.info('Initializing database...');
     initializeDatabase();
-    console.log('✅ Database initialized');
+    logger.info('Database initialized');
     
     // Start Express server
     const server = app.listen(PORT, () => {
-      console.log(`✅ Server running on port ${PORT}`);
-      console.log(`📡 API available at /api/mining`);
-      console.log(`❤️  Health check at /health`);
+      logger.info(`Server running on port ${PORT}`);
+      logger.info('API available at /api/mining');
+      logger.info('Health check at /health');
     });
     
     // Graceful shutdown
     const shutdown = async (signal: string) => {
-      console.log(`\n⚠️  Received ${signal}. Shutting down gracefully...`);
+      logger.warn(`Received ${signal}. Shutting down gracefully...`);
       
       // Stop scheduler
       if (miningScheduler) {
-        console.log('⏸️  Stopping mining scheduler...');
+        logger.info('Stopping mining scheduler...');
         miningScheduler.stop();
       }
       
       // Close database connection
-      console.log('📦 Closing database connection...');
+      logger.info('Closing database connection...');
       closeDatabase();
       
       // Close server
       server.close(() => {
-        console.log('✅ Server closed');
+        logger.info('Server closed');
         process.exit(0);
       });
       
       // Force close after 10 seconds
       setTimeout(() => {
-        console.error('❌ Forced shutdown after timeout');
+        logger.error('Forced shutdown after timeout');
         process.exit(1);
       }, 10000);
     };
@@ -196,7 +196,7 @@ async function startServer() {
     
     return server;
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    logger.error('Failed to start server:', { error: (error as Error).message });
     process.exit(1);
   }
 }

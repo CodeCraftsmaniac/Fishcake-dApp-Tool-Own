@@ -1,0 +1,15 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "Running pre-commit hooks..."
+
+# Lint backend
+cd backend && npx tsc --noEmit && cd ..
+
+# Lint Web-App
+cd Web-App && npx next lint --max-warnings=0 && cd ..
+
+# Lint CLI-App
+cd CLI-App && npx tsc --noEmit && cd ..
+
+echo "Pre-commit checks passed!"

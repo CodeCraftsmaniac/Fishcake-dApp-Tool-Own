@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Quicksand } from 'next/font/google';
 import { Providers } from '@/lib/providers';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import '@/styles/globals.css';
 
 const quicksand = Quicksand({ 
@@ -26,7 +27,9 @@ export default function RootLayout({
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${quicksand.variable} font-sans antialiased`}>
         <Providers>
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </Providers>
       </body>
     </html>

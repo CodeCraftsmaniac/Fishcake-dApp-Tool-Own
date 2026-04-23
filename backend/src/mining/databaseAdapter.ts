@@ -6,6 +6,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import logger from '../utils/logger.js';
 
 // Lazy initialization - Supabase client is created on first use
 let _supabase: SupabaseClient | null = null;
@@ -23,8 +24,8 @@ function db(): SupabaseClient {
       throw new Error('SUPABASE_SERVICE_ROLE_KEY is required but not set!');
     }
     
-    console.log('🔗 Initializing Supabase client...');
-    console.log(`   URL: ${SUPABASE_URL}`);
+    logger.info('🔗 Initializing Supabase client...');
+    logger.info(`   URL: ${SUPABASE_URL}`);
     _supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: {
         autoRefreshToken: false,
@@ -139,9 +140,9 @@ export async function initializeDatabase(): Promise<void> {
   const supabaseUrl = process.env.SUPABASE_URL || 'https://znatmrnkfjptiensiybb.supabase.co';
   const hasKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
   
-  console.log('📦 Initializing Supabase connection...');
-  console.log(`   URL: ${supabaseUrl}`);
-  console.log(`   Key: ${hasKey ? '***set***' : '⚠️ NOT SET'}`);
+  logger.info('📦 Initializing Supabase connection...');
+  logger.info(`   URL: ${supabaseUrl}`);
+  logger.info(`   Key: ${hasKey ? '***set***' : '⚠️ NOT SET'}`);
   
   try {
     // Check if tables exist by querying mining_config
@@ -153,12 +154,12 @@ export async function initializeDatabase(): Promise<void> {
     
     if (error) {
       if (error.code === '42P01') {
-        console.error('❌ Supabase tables not found! Run migration SQL first.');
+        logger.error('❌ Supabase tables not found! Run migration SQL first.');
         throw new Error('Database tables not initialized');
       }
       // If no row found, insert default
       if (error.code === 'PGRST116') {
-        console.log('📝 Inserting default config row...');
+        logger.info('📝 Inserting default config row...');
         await db().from('mining_config').insert({ id: 1 });
       }
     }
@@ -171,13 +172,13 @@ export async function initializeDatabase(): Promise<void> {
       .single();
     
     if (schedError?.code === 'PGRST116') {
-      console.log('📝 Inserting default scheduler state...');
+      logger.info('📝 Inserting default scheduler state...');
       await db().from('scheduler_state').insert({ id: 1, is_running: false, processing_wallets: '[]' });
     }
     
-    console.log('✅ Supabase database initialized');
+    logger.info('✅ Supabase database initialized');
   } catch (error) {
-    console.error('❌ Failed to initialize database:', error);
+    logger.error('Failed to initialize database:', { error: (error as Error).message });
     throw error;
   }
 }
@@ -186,7 +187,7 @@ export async function initializeDatabase(): Promise<void> {
  * Close database (no-op for Supabase, just for interface compatibility)
  */
 export function closeDatabase(): void {
-  console.log('✅ Supabase connection cleanup (no-op)');
+  logger.info('✅ Supabase connection cleanup (no-op)');
 }
 
 /**
@@ -609,7 +610,7 @@ export const eventOps = {
       const { error: rpcError } = await db().rpc('increment_retry_count', { event_id: id });
       if (rpcError) {
         // RPC might not exist, try alternative or ignore
-        console.log('increment_retry_count RPC not available:', rpcError.message);
+        logger.info('increment_retry_count RPC not available:', { error: rpcError.message });
       }
     } catch {
       // If RPC doesn't exist, that's ok - retry_count will be handled manually
@@ -636,7 +637,7 @@ export const logOps = {
       });
     
     if (error) {
-      console.error('Failed to insert log:', error.message);
+      logger.error('Failed to insert log:', { error: error.message });
       // Don't throw - logging should never crash the app
     }
   },

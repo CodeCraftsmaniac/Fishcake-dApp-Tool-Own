@@ -21,7 +21,7 @@ interface WalletState {
   setChainId: (chainId: number | null) => void;
   setBalances: (balances: Partial<WalletState['balances']>) => void;
   setNFTPass: (nftPass: WalletState['nftPass']) => void;
-  reset: () => void;
+  logout: () => void;
 }
 
 export const useWalletStore = create<WalletState>()((set) => ({
@@ -45,7 +45,7 @@ export const useWalletStore = create<WalletState>()((set) => ({
     balances: { ...state.balances, ...balances },
   })),
   setNFTPass: (nftPass) => set({ nftPass }),
-  reset: () => set({
+  logout: () => set({
     isConnected: false,
     address: null,
     chainId: null,
@@ -74,6 +74,7 @@ interface EventState {
   setSelectedEvent: (event: Event | null) => void;
   setLoading: (isLoading: boolean) => void;
   updateEvent: (eventId: number, updates: Partial<Event>) => void;
+  clearEvents: () => void;
 }
 
 export const useEventStore = create<EventState>()((set) => ({
@@ -88,6 +89,7 @@ export const useEventStore = create<EventState>()((set) => ({
       e.activityId === eventId ? { ...e, ...updates } : e
     ),
   })),
+  clearEvents: () => set({ myEvents: [], selectedEvent: null }),
 }));
 
 // Address book state (persisted)
@@ -134,11 +136,13 @@ interface UIState {
   sidebarOpen: boolean;
   gasPrice: number | null;
   gasTrend: 'up' | 'down' | 'stable';
+  connectionStatus: 'connected' | 'disconnected' | 'error' | null;
   setTheme: (theme: 'light' | 'dark') => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   setGasPrice: (price: number | null) => void;
   setGasTrend: (trend: 'up' | 'down' | 'stable') => void;
+  setConnectionStatus: (status: UIState['connectionStatus']) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -148,11 +152,13 @@ export const useUIStore = create<UIState>()(
       sidebarOpen: true,
       gasPrice: null,
       gasTrend: 'stable',
+      connectionStatus: null,
       setTheme: (theme) => set({ theme }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
       setGasPrice: (gasPrice) => set({ gasPrice }),
       setGasTrend: (gasTrend) => set({ gasTrend }),
+      setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
     }),
     {
       name: 'fishcake-ui',

@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { configOps, logOps, schedulerOps } from './database.js';
 import { getReadyWallets, MiningWallet } from './walletService.js';
 import { processWallet, MiningConfig } from './eventProcessor.js';
+import logger from '../utils/logger.js';
 
 interface SchedulerState {
   id: number;
@@ -61,7 +62,7 @@ export class MiningScheduler extends EventEmitter {
         schedulerOps.stop.run();
       }
     } catch (error) {
-      console.error('Failed to restore scheduler state:', error);
+      logger.error('Failed to restore scheduler state:', { error: (error as Error).message });
     }
   }
 

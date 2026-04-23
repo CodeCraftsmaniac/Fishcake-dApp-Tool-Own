@@ -5,6 +5,7 @@
 
 import { JsonRpcProvider, FeeData } from "ethers";
 import dotenv from "dotenv";
+import logger from '../utils/logger.js';
 import {
   getSmartProvider,
   executeWithFailover,
@@ -40,7 +41,7 @@ export function initializeProvider(): void {
   _initialized = true;
   initializeRpcHealth();
   startHealthMonitoring();
-  console.log("[Provider] Initialized with Multi-RPC Manager");
+  logger.info("[Provider] Initialized with Multi-RPC Manager");
 }
 
 export function getRpcUrl(): string {
@@ -93,7 +94,7 @@ export function switchToNextRpc(): string {
     _syncProvider = null;
   }
   const current = getCurrentRpc();
-  console.log(`[Provider] Switched RPC: ${current.name} (${current.latency}ms)`);
+  logger.info(`[Provider] Switched RPC: ${current.name} (${current.latency}ms)`);
   return current.url;
 }
 

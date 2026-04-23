@@ -2,6 +2,7 @@
 import { ethers } from 'ethers';
 import { walletOps, logOps, db } from './database.js';
 import { encrypt, decrypt, EncryptedData } from './encryption.js';
+import logger from '../utils/logger.js';
 
 const CONTRACTS = {
   FCC_TOKEN: '0x84eBc138F4Ab844A3050a6059763D269dC9951c6',
@@ -152,7 +153,7 @@ export async function updateWalletBalances(
       pol_balance: ethers.formatEther(polBalance),
     });
   } catch (error) {
-    console.error(`Failed to update balances for ${address}:`, error);
+    logger.error(`Failed to update balances for ${address}:`, { error: (error as Error).message });
   }
 }
 

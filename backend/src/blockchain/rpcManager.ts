@@ -8,6 +8,7 @@
  */
 
 import { JsonRpcProvider } from "ethers";
+import logger from '../utils/logger.js';
 
 // RPC Configuration with all provided endpoints
 export interface RpcEndpoint {
@@ -284,7 +285,7 @@ export async function getSmartProvider(): Promise<JsonRpcProvider> {
   activeRpcUrl = fastest.url;
   activeProvider = getOrCreateProvider(fastest.url);
   
-  console.log(`[RPC] Switched to ${fastest.name} (${fastest.latency}ms)`);
+  logger.info(`[RPC] Switched to ${fastest.name} (${fastest.latency}ms)`);
   
   return activeProvider;
 }
@@ -318,7 +319,7 @@ export async function executeWithFailover<T>(
       return result;
     } catch (error) {
       lastError = error as Error;
-      console.error(`[RPC] Operation failed on ${activeRpcUrl}:`, (error as Error).message);
+      logger.error(`[RPC] Operation failed on ${activeRpcUrl}:`, { error: (error as Error).message });
       
       // Mark current RPC as failed
       const health = rpcHealthMap.get(activeRpcUrl);
@@ -338,7 +339,7 @@ export async function executeWithFailover<T>(
       if (healthyRpcs.length > 0) {
         activeRpcUrl = healthyRpcs[0].url;
         activeProvider = getOrCreateProvider(activeRpcUrl);
-        console.log(`[RPC] Failover to ${getRpcName(activeRpcUrl)}`);
+        logger.info(`[RPC] Failover to ${getRpcName(activeRpcUrl)}`);
       }
     }
   }
@@ -426,9 +427,9 @@ export function startHealthMonitoring(): void {
   
   // Initial check
   checkAllRpcsHealth().then(results => {
-    console.log(`[RPC] Initial health check complete. ${results.length}/${RPC_ENDPOINTS.length} healthy`);
+    logger.info(`[RPC] Initial health check complete. ${results.length}/${RPC_ENDPOINTS.length} healthy`);
     if (results.length > 0) {
-      console.log(`[RPC] Fastest: ${getRpcName(results[0].url)} (${results[0].latency}ms)`);
+      logger.info(`[RPC] Fastest: ${getRpcName(results[0].url)} (${results[0].latency}ms)`);
     }
   });
   
@@ -445,14 +446,14 @@ export function startHealthMonitoring(): void {
         if (currentHealth && fastest.url !== activeRpcUrl) {
           // Switch if fastest is >50% faster
           if (fastest.latency < currentHealth.latency * 0.5) {
-            console.log(`[RPC] Auto-switching from ${getRpcName(activeRpcUrl)} to ${getRpcName(fastest.url)} (${currentHealth.latency}ms -> ${fastest.latency}ms)`);
+            logger.info(`[RPC] Auto-switching from ${getRpcName(activeRpcUrl)} to ${getRpcName(fastest.url)} (${currentHealth.latency}ms -> ${fastest.latency}ms)`);
             activeRpcUrl = fastest.url;
             activeProvider = getOrCreateProvider(fastest.url);
           }
         }
       }
     } catch (error) {
-      console.error("[RPC] Health check error:", error);
+      logger.error("[RPC] Health check error:", { error: (error as Error).message });
     }
   }, CONFIG.HEALTH_CHECK_INTERVAL);
 }

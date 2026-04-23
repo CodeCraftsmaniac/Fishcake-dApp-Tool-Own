@@ -12,7 +12,7 @@ This guide covers deploying the Fishcake Backend to an Oracle Cloud VM.
 
 ## VM Details
 
-- **IP**: 129.213.138.245
+- **IP**: 129.80.144.145
 - **User**: ubuntu (or opc)
 - **SSH Key**: Located in `C:\Users\rhran\.oci\` (Windows) or `~/.oci/` (Linux)
 
@@ -20,7 +20,7 @@ This guide covers deploying the Fishcake Backend to an Oracle Cloud VM.
 
 SSH into the VM:
 ```bash
-ssh -i ~/.ssh/your_private_key ubuntu@129.213.138.245
+ssh -i ~/.ssh/your_private_key ubuntu@129.80.144.145
 ```
 
 Update system and install prerequisites:

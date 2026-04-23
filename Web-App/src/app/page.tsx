@@ -24,8 +24,15 @@ function ConnectWalletPrompt() {
       setError('Please enter your private key');
       return;
     }
-    if (!passphrase.trim() || passphrase.length < 6) {
-      setError('Passphrase must be at least 6 characters');
+    if (!passphrase.trim() || passphrase.length < 8) {
+      setError('Passphrase must be at least 8 characters');
+      return;
+    }
+    const hasUpper = /[A-Z]/.test(passphrase);
+    const hasLower = /[a-z]/.test(passphrase);
+    const hasDigit = /[0-9]/.test(passphrase);
+    if (!hasUpper || !hasLower || !hasDigit) {
+      setError('Passphrase must contain uppercase, lowercase, and a number');
       return;
     }
 
@@ -100,7 +107,7 @@ function ConnectWalletPrompt() {
             <div className="relative">
               <Input
                 type="password"
-                placeholder="Create a passphrase (min 6 chars)"
+                placeholder="Create a passphrase (min 8 chars, upper/lower/digit)"
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
                 className="pl-10"

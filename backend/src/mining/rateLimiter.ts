@@ -8,10 +8,50 @@ interface RateLimitEntry {
 
 const DEFAULT_LIMIT = 10; // requests
 const DEFAULT_WINDOW_MS = 60000; // 1 minute
+const MAX_TRACKED_KEYS = 10000; // Memory cap for rate limit entries
+const CLEANUP_INTERVAL_MS = 300000; // 5 minutes
 
-class RateLimiter {
+export class RateLimiter {
   private limits: Map<string, RateLimitEntry> = new Map();
   private limitPerEndpoint: Map<string, number> = new Map();
+  private cleanupTimer: NodeJS.Timeout | null = null;
+
+  constructor() {
+    this.startPeriodicCleanup();
+  }
+
+  private startPeriodicCleanup(): void {
+    if (this.cleanupTimer) return;
+    this.cleanupTimer = setInterval(() => {
+      this.enforceMemoryCap();
+    }, CLEANUP_INTERVAL_MS);
+    this.cleanupTimer.unref?.();
+  }
+
+  /**
+   * Enforce memory cap by removing oldest entries when over limit
+   */
+  private enforceMemoryCap(): void {
+    if (this.limits.size <= MAX_TRACKED_KEYS) return;
+
+    const entries = Array.from(this.limits.entries());
+    // Sort by resetAt (oldest first)
+    entries.sort((a, b) => a[1].resetAt - b[1].resetAt);
+
+    const toDelete = entries.slice(0, entries.length - MAX_TRACKED_KEYS);
+    for (const [key] of toDelete) {
+      this.limits.delete(key);
+    }
+  }
+
+  destroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    this.limits.clear();
+    this.limitPerEndpoint.clear();
+  }
 
   /**
    * Set custom limit for an endpoint

@@ -3,6 +3,16 @@ import { ethers } from 'ethers';
 
 const MAX_GAS_PRICE_GWEI = 500;
 const DEFAULT_MULTIPLIER = 1.1;
+const GAS_CACHE_TTL_MS = 30000; // 30 seconds
+
+interface CachedGas {
+  estimate: GasEstimate;
+  timestamp: number;
+  providerUrl: string;
+  multiplier: number;
+}
+
+let gasCache: CachedGas | null = null;
 
 export interface GasEstimate {
   gasPrice: bigint;
@@ -18,6 +28,18 @@ export async function getOptimizedGasPrice(
   provider: ethers.JsonRpcProvider,
   multiplier: number = DEFAULT_MULTIPLIER
 ): Promise<GasEstimate> {
+  const providerUrl = ((provider as any)?._getConnection?.() as { url?: string } | undefined)?.url || '';
+
+  // Check cache
+  if (
+    gasCache &&
+    gasCache.providerUrl === providerUrl &&
+    gasCache.multiplier === multiplier &&
+    Date.now() - gasCache.timestamp < GAS_CACHE_TTL_MS
+  ) {
+    return gasCache.estimate;
+  }
+
   const feeData = await provider.getFeeData();
   
   // Get base gas price
@@ -41,12 +63,29 @@ export async function getOptimizedGasPrice(
     ? (feeData.maxPriorityFeePerGas * BigInt(Math.floor(multiplier * 100))) / 100n
     : ethers.parseUnits('30', 'gwei');
 
-  return {
+  const estimate: GasEstimate = {
     gasPrice,
     gasPriceGwei: ethers.formatUnits(gasPrice, 'gwei'),
     maxFeePerGas: maxFeePerGas > maxGas ? maxGas : maxFeePerGas,
     maxPriorityFeePerGas,
   };
+
+  // Cache the result
+  gasCache = {
+    estimate,
+    timestamp: Date.now(),
+    providerUrl,
+    multiplier,
+  };
+
+  return estimate;
+}
+
+/**
+ * Clear the gas price cache (useful after provider change)
+ */
+export function clearGasCache(): void {
+  gasCache = null;
 }
 
 /**

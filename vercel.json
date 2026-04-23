@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "name": "fishcake-dapp",
+  "builds": [
+    {
+      "src": "Web-App/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "Web-App/$1"
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_API_URL": "http://129.213.138.245:3001"
+  },
+  "github": {
+    "enabled": true,
+    "silent": false
+  }
+}

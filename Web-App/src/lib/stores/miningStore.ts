@@ -162,6 +162,10 @@ interface MiningStore {
   // Stats
   updateStats: (updates: Partial<MiningStats>) => void;
   updateWalletStats: (walletId: string) => void;
+  
+  // Status helpers
+  updateWalletStatus: (id: string, status: MiningWallet['status']) => void;
+  setSchedulerRunning: (isRunning: boolean) => void;
 }
 
 const initialWorkflowNodes: WorkflowNode[] = [
@@ -495,6 +499,17 @@ export const useMiningStore = create<MiningStore>()(
 
       clearLogs: () => {
         set({ logs: [] });
+      },
+
+      // Status helpers
+      updateWalletStatus: (id, status) => {
+        set((state) => ({
+          wallets: state.wallets.map((w) => (w.id === id ? { ...w, status } : w)),
+        }));
+      },
+      
+      setSchedulerRunning: (isAutomationRunning) => {
+        set({ isAutomationRunning });
       },
 
       // Stats

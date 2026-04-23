@@ -1,5 +1,6 @@
 // RPC Connection Pool - Multiple RPC endpoints with failover
 import { ethers } from 'ethers';
+import logger from '../utils/logger.js';
 
 interface RpcEndpoint {
   url: string;
@@ -105,7 +106,7 @@ class RpcPool {
       if (endpoint) {
         endpoint.failures++;
         endpoint.lastFailure = Date.now();
-        console.warn(`RPC failure (${endpoint.failures}/${MAX_FAILURES}): ${this.currentUrl}`, error?.message);
+        logger.warn(`RPC failure (${endpoint.failures}/${MAX_FAILURES}): ${this.currentUrl}`, { error: error?.message });
       }
     }
     

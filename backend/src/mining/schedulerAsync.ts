@@ -8,6 +8,7 @@
 import { EventEmitter } from 'events';
 import { ethers } from 'ethers';
 import crypto from 'crypto';
+import logger from '../utils/logger.js';
 import { 
   configOps, 
   logOps, 
@@ -37,15 +38,15 @@ export class MiningScheduler extends EventEmitter {
   async initialize(): Promise<void> {
     if (this.initialized) return;
     
-    console.log('🔄 Initializing scheduler...');
+    logger.info('🔄 Initializing scheduler...');
     
     try {
       // Check for persisted running state
       const state = await schedulerOps.get();
       
       if (state && state.is_running) {
-        console.log('⚠️ Scheduler was running before restart.');
-        console.log('   Passphrase is required to resume. Marking as stopped.');
+        logger.info('⚠️ Scheduler was running before restart.');
+        logger.info('   Passphrase is required to resume. Marking as stopped.');
         
         // Log the restart
         await logOps.insert({
@@ -66,9 +67,9 @@ export class MiningScheduler extends EventEmitter {
       }
       
       this.initialized = true;
-      console.log('✅ Scheduler initialized');
+      logger.info('✅ Scheduler initialized');
     } catch (error) {
-      console.error('❌ Failed to initialize scheduler:', error);
+      logger.error('Failed to initialize scheduler:', { error: (error as Error).message });
       throw error;
     }
   }
@@ -164,7 +165,7 @@ export class MiningScheduler extends EventEmitter {
       this.emit('stopped');
       this.emit('log', { level: 'info', message: 'Mining scheduler stopped' });
     } catch (error) {
-      console.error('Error stopping scheduler:', error);
+      logger.error('Error stopping scheduler:', { error: (error as Error).message });
     }
   }
 

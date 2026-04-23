@@ -16,6 +16,7 @@ import {
   MiningWallet,
 } from './databaseAdapter.js';
 import { importWallets, WalletImportResult } from './walletServiceAsync.js';
+import logger from '../utils/logger.js';
 import { 
   getSmartProvider, 
   getAllRpcStatus, 
@@ -98,7 +99,7 @@ router.get('/status', async (_req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('Status error:', error);
+    logger.error('Status error:', { error: (error as Error).message });
     res.status(500).json({ 
       success: false, 
       error: (error as Error).message 
@@ -126,7 +127,7 @@ router.post('/start', async (req: Request, res: Response) => {
     await miningScheduler.start(passphrase);
     res.json({ success: true, message: 'Mining automation started' });
   } catch (error) {
-    console.error('Start error:', error);
+    logger.error('Start error:', { error: (error as Error).message });
     res.status(500).json({ 
       success: false, 
       error: (error as Error).message 
@@ -143,7 +144,7 @@ router.post('/stop', async (_req: Request, res: Response) => {
     await miningScheduler.stop();
     res.json({ success: true, message: 'Mining automation stopped' });
   } catch (error) {
-    console.error('Stop error:', error);
+    logger.error('Stop error:', { error: (error as Error).message });
     res.status(500).json({ 
       success: false, 
       error: (error as Error).message 
@@ -297,10 +298,21 @@ router.post('/wallets/import', async (req: Request, res: Response) => {
       });
     }
 
-    if (passphrase.length < 6) {
+    if (passphrase.length < 8) {
       return res.status(400).json({
         success: false,
-        error: 'Passphrase must be at least 6 characters'
+        error: 'Passphrase must be at least 8 characters'
+      });
+    }
+
+    // Passphrase complexity: must contain uppercase, lowercase, and number
+    const hasUpper = /[A-Z]/.test(passphrase);
+    const hasLower = /[a-z]/.test(passphrase);
+    const hasDigit = /[0-9]/.test(passphrase);
+    if (!hasUpper || !hasLower || !hasDigit) {
+      return res.status(400).json({
+        success: false,
+        error: 'Passphrase must contain uppercase, lowercase, and a number'
       });
     }
 

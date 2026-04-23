@@ -6,6 +6,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import logger from '../utils/logger.js';
 
 // Environment configuration
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://znatmrnkfjptiensiybb.supabase.co';
@@ -133,7 +134,7 @@ export interface SchedulerState {
  * Initialize Supabase schema (run once to set up tables)
  */
 export async function initializeSupabaseSchema(): Promise<void> {
-  console.log('📦 Initializing Supabase schema...');
+  logger.info('📦 Initializing Supabase schema...');
   
   // Tables are created via Supabase dashboard SQL editor
   // This function verifies they exist
@@ -143,11 +144,11 @@ export async function initializeSupabaseSchema(): Promise<void> {
     .limit(1);
   
   if (error && error.code === '42P01') {
-    console.error('❌ Tables not found. Please run the migration SQL in Supabase dashboard.');
+    logger.error('❌ Tables not found. Please run the migration SQL in Supabase dashboard.');
     throw new Error('Supabase tables not initialized');
   }
   
-  console.log('✅ Supabase schema verified');
+  logger.info('✅ Supabase schema verified');
 }
 
 /**
@@ -344,7 +345,7 @@ export const logOps = {
       .insert(log);
     
     if (error) {
-      console.error('Failed to insert log:', error);
+      logger.error('Failed to insert log:', { error: (error as Error).message });
       // Don't throw - logging failures shouldn't crash the app
     }
   },

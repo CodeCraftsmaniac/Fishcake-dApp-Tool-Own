@@ -26,6 +26,17 @@ const router = Router();
 
 // Track connected SSE clients
 const sseClients = new Set<Response>();
+const MAX_SSE_CONNECTIONS = 50;
+const SSE_CLIENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes stale timeout
+
+// Periodic cleanup of stale SSE clients
+setInterval(() => {
+  sseClients.forEach((client) => {
+    if (client.writableEnded || client.destroyed) {
+      sseClients.delete(client);
+    }
+  });
+}, SSE_CLIENT_TIMEOUT_MS);
 
 // Initialize RPC health monitoring
 initializeRpcHealth();
@@ -34,6 +45,31 @@ startHealthMonitoring();
 // Get provider dynamically
 async function getProvider(): Promise<ethers.JsonRpcProvider> {
   return getSmartProvider();
+}
+
+/**
+ * Broadcast a message to all connected SSE clients
+ */
+function broadcast(event: string, data: unknown): void {
+  if (sseClients.size >= MAX_SSE_CONNECTIONS) {
+    // Evict oldest client if at capacity
+    const oldest = sseClients.values().next().value;
+    if (oldest) {
+      oldest.end();
+      sseClients.delete(oldest);
+    }
+  }
+
+  const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  sseClients.forEach((client) => {
+    try {
+      if (!client.writableEnded) {
+        client.write(message);
+      }
+    } catch {
+      sseClients.delete(client);
+    }
+  });
 }
 
 // Hook up scheduler events to SSE
@@ -60,20 +96,6 @@ miningScheduler.on('wallet_complete', (wallet: MiningWallet) => {
 miningScheduler.on('wallet_error', ({ wallet, error }: { wallet: MiningWallet; error: Error }) => {
   broadcast('wallet_error', { address: wallet.address, error: error.message });
 });
-
-/**
- * Broadcast event to all SSE clients
- */
-function broadcast(type: string, data: unknown): void {
-  const message = JSON.stringify({ type, data, timestamp: Date.now() });
-  sseClients.forEach(client => {
-    try {
-      client.write(`data: ${message}\n\n`);
-    } catch {
-      sseClients.delete(client);
-    }
-  });
-}
 
 // ==================== STATUS ====================
 
@@ -296,10 +318,21 @@ router.post('/wallets/import', async (req: Request, res: Response) => {
       });
     }
 
-    if (passphrase.length < 6) {
+    if (passphrase.length < 8) {
       return res.status(400).json({
         success: false,
-        error: 'Passphrase must be at least 6 characters'
+        error: 'Passphrase must be at least 8 characters'
+      });
+    }
+
+    // Passphrase complexity: must contain uppercase, lowercase, and number
+    const hasUpper = /[A-Z]/.test(passphrase);
+    const hasLower = /[a-z]/.test(passphrase);
+    const hasDigit = /[0-9]/.test(passphrase);
+    if (!hasUpper || !hasLower || !hasDigit) {
+      return res.status(400).json({
+        success: false,
+        error: 'Passphrase must contain uppercase, lowercase, and a number'
       });
     }
 
@@ -406,17 +439,35 @@ router.delete('/wallets/:address', (req: Request, res: Response) => {
 
 /**
  * GET /api/mining/events
- * Get recent mining events
+ * Get recent mining events with pagination
  */
 router.get('/events', (req: Request, res: Response) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 50;
-    const events = getRecentEvents(limit);
-    res.json({ success: true, data: events });
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 20));
+    const offset = (page - 1) * limit;
+
+    const allEvents = getRecentEvents(10000); // Get all for counting
+    const events = allEvents.slice(offset, offset + limit);
+    const total = allEvents.length;
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      success: true,
+      data: events,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: (error as Error).message 
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
     });
   }
 });
@@ -496,27 +547,9 @@ router.get('/wallets/:address/stats', (req: Request, res: Response) => {
 
     res.json({ success: true, data: stats });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: (error as Error).message 
-    });
-  }
-});
-
-// ==================== STATS ====================
-
-/**
- * GET /api/mining/stats
- * Get mining statistics
- */
-router.get('/stats', (_req: Request, res: Response) => {
-  try {
-    const stats = getMiningStats();
-    res.json({ success: true, data: stats });
-  } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: (error as Error).message 
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
     });
   }
 });
@@ -525,17 +558,35 @@ router.get('/stats', (_req: Request, res: Response) => {
 
 /**
  * GET /api/mining/logs
- * Get recent logs
+ * Get recent logs with pagination
  */
 router.get('/logs', (req: Request, res: Response) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 100;
-    const logs = logOps.getRecent.all(limit);
-    res.json({ success: true, data: logs });
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 20));
+    const offset = (page - 1) * limit;
+
+    const allLogs = logOps.getRecent.all(10000); // Get all for counting
+    const logs = allLogs.slice(offset, offset + limit);
+    const total = allLogs.length;
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      success: true,
+      data: logs,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: (error as Error).message 
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
     });
   }
 });

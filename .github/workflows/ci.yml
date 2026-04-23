@@ -89,7 +89,7 @@ jobs:
     needs: backend-ci
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -100,13 +100,64 @@ jobs:
           host: ${{ secrets.ORACLE_VM_HOST }}
           username: ${{ secrets.ORACLE_VM_USER }}
           key: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          script_stop: true
+          command_timeout: 10m
           script: |
+            set -e
+
+            # --- First-time VM provisioning ---
+            if ! command -v node &> /dev/null; then
+              echo "Installing Node.js 20..."
+              curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+              sudo dnf install -y nodejs
+            fi
+
+            if ! command -v pm2 &> /dev/null; then
+              echo "Installing PM2..."
+              sudo npm install -g pm2
+            fi
+
+            if ! command -v git &> /dev/null; then
+              echo "Installing git..."
+              sudo dnf install -y git
+            fi
+
+            # --- Clone or update repo ---
+            if [ ! -d ~/fishcake-backend/.git ]; then
+              echo "Cloning repository..."
+              git clone https://github.com/CodeCraftsmaniac/Fishcake-dApp-Tool-Own.git ~/fishcake-backend
+            fi
+
             cd ~/fishcake-backend
-            git pull origin main
-            npm ci --omit=dev
+
+            echo "Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            # --- Create .env if missing ---
+            if [ ! -f backend/.env ]; then
+              echo "Creating backend .env from example..."
+              cp backend/.env.example backend/.env
+              echo ""
+              echo "⚠️  IMPORTANT: Edit backend/.env with real values:"
+              echo "  vi ~/fishcake-backend/backend/.env"
+            fi
+
+            # --- Install, build, and restart ---
+            cd backend
+            echo "Installing dependencies..."
+            npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+            echo "Building..."
             npm run build
-            pm2 restart fishcake-backend || pm2 start dist/serverSupabase.js --name fishcake-backend
+            echo "Restarting PM2..."
+            pm2 restart fishcake-backend 2>/dev/null || pm2 start dist/serverSupabase.js --name fishcake-backend
             pm2 save
+
+            # --- Ensure PM2 starts on boot ---
+            pm2 startup 2>/dev/null | grep -o 'sudo .*' | bash 2>/dev/null || true
+
+            echo "✅ Deploy complete!"
+            pm2 status
 
   # Summary
   ci-summary:

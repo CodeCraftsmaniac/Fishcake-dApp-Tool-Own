@@ -2,6 +2,7 @@
 import Database, { Database as DatabaseType, Statement } from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import logger from '../utils/logger.js';
 
 const DB_PATH = process.env.MINING_DB_PATH || path.join(process.cwd(), 'data', 'mining.db');
 
@@ -209,6 +210,28 @@ export function initializeDatabase(): void {
     )
   `);
 
+  // Refresh Tokens Table (for JWT persistence)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token_hash TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch())
+    )
+  `);
+
+  // Pending Nonces Table (for nonce persistence across restarts)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pending_nonces (
+      address TEXT PRIMARY KEY,
+      nonce INTEGER NOT NULL,
+      pending_count INTEGER NOT NULL DEFAULT 1,
+      last_updated INTEGER NOT NULL
+    )
+  `);
+
   // Create indexes
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_wallets_status ON mining_wallets(status);
@@ -221,9 +244,11 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_logs_wallet ON mining_logs(wallet_id);
     CREATE INDEX IF NOT EXISTS idx_logs_action ON mining_logs(action);
     CREATE INDEX IF NOT EXISTS idx_logs_created ON mining_logs(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON refresh_tokens(expires_at);
   `);
 
-  console.log('✅ Mining database initialized');
+  logger.info('✅ Mining database initialized');
 }
 
 /**
@@ -232,9 +257,9 @@ export function initializeDatabase(): void {
 export function closeDatabase(): void {
   try {
     db.close();
-    console.log('✅ Mining database connection closed');
+    logger.info('✅ Mining database connection closed');
   } catch (error) {
-    console.error('Error closing database:', error);
+    logger.error('Error closing database:', { error: (error as Error).message });
   }
 }
 
@@ -582,6 +607,54 @@ export const statsOps: Record<string, Statement> = {
       (SELECT COALESCE(SUM(CAST(total_dropped AS REAL)), 0) FROM mining_events WHERE status = 'FINISHED') as fcc_distributed,
       (SELECT COALESCE(SUM(CAST(reward_received AS REAL)), 0) FROM mining_events WHERE reward_eligible = 1) as rewards_collected,
       (SELECT ROUND(100.0 * COUNT(CASE WHEN status = 'FINISHED' THEN 1 END) / NULLIF(COUNT(*), 0), 2) FROM mining_events) as success_rate
+  `),
+};
+
+// Refresh token operations
+export const refreshTokenOps: Record<string, Statement> = {
+  store: db.prepare(`
+    INSERT INTO refresh_tokens (token_hash, user_id, session_id, expires_at)
+    VALUES (?, ?, ?, ?)
+  `),
+
+  getByHash: db.prepare(`
+    SELECT * FROM refresh_tokens WHERE token_hash = ?
+  `),
+
+  deleteByHash: db.prepare(`
+    DELETE FROM refresh_tokens WHERE token_hash = ?
+  `),
+
+  deleteByUserId: db.prepare(`
+    DELETE FROM refresh_tokens WHERE user_id = ?
+  `),
+
+  cleanupExpired: db.prepare(`
+    DELETE FROM refresh_tokens WHERE expires_at < unixepoch()
+  `),
+};
+
+// Pending nonce operations
+export const nonceOps: Record<string, Statement> = {
+  get: db.prepare(`
+    SELECT * FROM pending_nonces WHERE address = ?
+  `),
+
+  upsert: db.prepare(`
+    INSERT INTO pending_nonces (address, nonce, pending_count, last_updated)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(address) DO UPDATE SET
+      nonce = excluded.nonce,
+      pending_count = excluded.pending_count,
+      last_updated = excluded.last_updated
+  `),
+
+  delete: db.prepare(`
+    DELETE FROM pending_nonces WHERE address = ?
+  `),
+
+  clearAll: db.prepare(`
+    DELETE FROM pending_nonces
   `),
 };
 

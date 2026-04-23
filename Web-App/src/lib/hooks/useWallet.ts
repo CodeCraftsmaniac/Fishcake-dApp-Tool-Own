@@ -36,7 +36,7 @@ function getCachedContract(address: string, abi: any, signerOrProvider: ethers.S
  */
 export function useWalletSync() {
   const { address, isConnected, provider } = useWallet();
-  const { setConnected, setAddress, setChainId, setBalances, setNFTPass, reset } = useWalletStore();
+  const { setConnected, setAddress, setChainId, setBalances, setNFTPass, logout } = useWalletStore();
   const fetchInProgress = useRef(false);
 
   const fetchBalances = useCallback(async () => {
@@ -97,10 +97,10 @@ export function useWalletSync() {
     setChainId(isConnected ? 137 : null);
 
     if (!isConnected) {
-      reset();
+      logout();
       contractCache.clear(); // Clear cache on disconnect
     }
-  }, [isConnected, address, setConnected, setAddress, setChainId, reset]);
+  }, [isConnected, address, setConnected, setAddress, setChainId, logout]);
 
   // Fetch data on connect and periodically (30s instead of 15s)
   useEffect(() => {
