@@ -107,8 +107,9 @@ jobs:
       - name: Install & Build backend (in CI - fast)
         working-directory: backend
         run: |
-          npm install --omit=dev
+          npm install
           npm run build
+          npm prune --omit=dev
 
       - name: Setup SSH key
         run: |
