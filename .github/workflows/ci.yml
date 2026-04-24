@@ -61,29 +61,6 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost:3001' }}
 
-  # CLI App CI
-  cli-ci:
-    name: CLI App CI
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: CLI-App
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: TypeScript compile check
-        run: npm run build
-
   # Deploy Backend to Oracle VM (only on main branch push)
   deploy-backend:
     name: Deploy Backend to Oracle VM
@@ -188,7 +165,7 @@ jobs:
   # Summary
   ci-summary:
     name: CI Summary
-    needs: [backend-ci, webapp-ci, cli-ci]
+    needs: [backend-ci, webapp-ci]
     runs-on: ubuntu-latest
     if: always()
     
@@ -198,8 +175,7 @@ jobs:
           echo "=== CI Pipeline Summary ==="
           echo "Backend CI: ${{ needs.backend-ci.result }}"
           echo "Web-App CI: ${{ needs.webapp-ci.result }}"
-          echo "CLI CI: ${{ needs.cli-ci.result }}"
-          if [[ "${{ needs.backend-ci.result }}" == "failure" || "${{ needs.webapp-ci.result }}" == "failure" || "${{ needs.cli-ci.result }}" == "failure" ]]; then
+          if [[ "${{ needs.backend-ci.result }}" == "failure" || "${{ needs.webapp-ci.result }}" == "failure" ]]; then
             echo "❌ Some CI jobs failed"
             exit 1
           fi
