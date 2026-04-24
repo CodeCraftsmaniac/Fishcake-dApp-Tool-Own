@@ -42,54 +42,43 @@ START FROM SECTION 1 AND WORK DOWN SEQUENTIALLY.
 
 ## 🔑 SUPABASE CREDENTIALS & SETUP COMMANDS
 
-### Supabase Project Details
+### Supabase Project Details (CONFIGURED)
 ```bash
 # Project URL
-SUPABASE_URL=<YOUR_SUPABASE_URL>
+SUPABASE_URL=https://znatmrnkfjptiensiybb.supabase.co
 
 # Anonymous Key (public, for frontend)
-SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY>
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NDUyMjgsImV4cCI6MjA5MTEyMTIyOH0.dRdIWV2Ps9eMuWMhoQKFczJUMXFkZo9ahyNo7qOmWw8
 
 # Service Role Key (secret, for backend ONLY)
-SUPABASE_SERVICE_ROLE_KEY=<YOUR_SUPABASE_SERVICE_ROLE_KEY>
-
-# PostgreSQL Connection String
-DATABASE_URL=<YOUR_DATABASE_URL>
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTU0NTIyOCwiZXhwIjoyMDkxMTIxMjI4fQ.1oTu1CHLdYwUFtLAlO7IEkqwrqgIFQQFGMPYdXDnNFA
 ```
 
 ### Push Schema to Supabase
 ```bash
 # Run migration SQL in Supabase SQL Editor:
-# Copy content from: backend/src/database/migration.sql
+# 1. Open: https://supabase.com/dashboard/project/znatmrnkfjptiensiybb/sql
+# 2. Copy content from: backend/src/database/migration.sql
+# 3. Click "Run"
 
-# OR use Supabase CLI:
+# OR use the push script (from environment with internet):
 cd backend
-npx supabase db push
+npm run db:push
+
+# Test connection:
+npm run db:test
 ```
 
 ### Environment Variables Setup Commands
 
-**Backend (.env):**
+**Backend (.env) - ALREADY CREATED:**
 ```bash
 cd backend
-cat > .env << 'EOF'
-# Supabase
-SUPABASE_URL=<YOUR_SUPABASE_URL>
-SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY>
-SUPABASE_SERVICE_ROLE_KEY=<YOUR_SUPABASE_SERVICE_ROLE_KEY>
-DATABASE_URL=<YOUR_DATABASE_URL>
-
-# Server
-PORT=3001
-NODE_ENV=production
-FRONTEND_URLS=https://fishcake-dapp.vercel.app,http://localhost:3000
-
-# JWT Secret (generate: openssl rand -base64 32)
-JWT_SECRET=your-32-char-secret-here
-
-# Encryption (generate: openssl rand -hex 32)
-ENCRYPTION_KEY=your-64-hex-char-key-here
-EOF
+# .env file already created with all required values:
+# - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
+# - JWT_SECRET (fishcake-railway-production-secret-2026)
+# - All RPC endpoints (Alchemy, Ankr, LlamaRPC, BlockPi, PublicNode)
+# - DATABASE_PATH, MINING_DB_PATH, FRONTEND_URLS
 ```
 
 **Web-App (.env.local):**
@@ -97,50 +86,42 @@ EOF
 cd Web-App
 cat > .env.local << 'EOF'
 NEXT_PUBLIC_API_URL=http://129.80.144.145:3001
-NEXT_PUBLIC_SUPABASE_URL=<YOUR_SUPABASE_URL>
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY>
+NEXT_PUBLIC_SUPABASE_URL=https://znatmrnkfjptiensiybb.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NDUyMjgsImV4cCI6MjA5MTEyMTIyOH0.dRdIWV2Ps9eMuWMhoQKFczJUMXFkZo9ahyNo7qOmWw8
 EOF
 ```
 
-**Oracle VM Environment Variables:**
+### Quick Setup Commands
+
+**Backend Deployment:**
 ```bash
-# SSH into Oracle VM and create .env file:
 ssh -i ~/.ssh/oracle_fcc_bot_v3 opc@129.80.144.145
 
-cat > ~/fishcake-backend/.env << 'EOF'
-SUPABASE_URL=<YOUR_SUPABASE_URL>
-SUPABASE_SERVICE_ROLE_KEY=<YOUR_SUPABASE_SERVICE_ROLE_KEY>
-SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY>
-DATABASE_URL=<YOUR_DATABASE_URL>
-NODE_ENV=production
-PORT=3001
-FRONTEND_URLS=https://fishcake-dapp.vercel.app,http://localhost:3000
-EOF
+# .env is ready - just copy it to VM:
+scp backend/.env opc@129.80.144.145:~/fishcake-backend/backend/.env
 ```
 
 **Vercel Environment Variables:**
 ```bash
-# Set via Vercel dashboard or CLI:
 vercel env add NEXT_PUBLIC_API_URL production
 # Value: http://129.80.144.145:3001
 
 vercel env add NEXT_PUBLIC_SUPABASE_URL production
-# Value: <YOUR_SUPABASE_URL>
+# Value: https://znatmrnkfjptiensiybb.supabase.co
 
 vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
-# Value: <YOUR_SUPABASE_ANON_KEY>
+# Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NDUyMjgsImV4cCI6MjA5MTEyMTIyOH0.dRdIWV2Ps9eMuWMhoQKFczJUMXFkZo9ahyNo7qOmWw8
 ```
 
 **GitHub Secrets (for CI/CD):**
 ```bash
 # Set via GitHub repo Settings > Secrets > Actions:
-SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
-SUPABASE_ANON_KEY
-DATABASE_URL
-ORACLE_VM_HOST (129.80.144.145)
-ORACLE_VM_USER (opc)
-ORACLE_VM_SSH_KEY (contents of ~/.ssh/oracle_fcc_bot_v3 private key)
+SUPABASE_URL=https://znatmrnkfjptiensiybb.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTU0NTIyOCwiZXhwIjoyMDkxMTIxMjI4fQ.1oTu1CHLdYwUFtLAlO7IEkqwrqgIFQQFGMPYdXDnNFA
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuYXRtcm5rZmpwdGllbnNpeWJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1NDUyMjgsImV4cCI6MjA5MTEyMTIyOH0.dRdIWV2Ps9eMuWMhoQKFczJUMXFkZo9ahyNo7qOmWw8
+ORACLE_VM_HOST=129.80.144.145
+ORACLE_VM_USER=opc
+ORACLE_VM_SSH_KEY=(contents of ~/.ssh/oracle_fcc_bot_v3 private key)
 VERCEL_TOKEN
 ```
 
