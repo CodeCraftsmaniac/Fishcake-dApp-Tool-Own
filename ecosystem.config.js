@@ -1,11 +1,11 @@
 module.exports = {
   apps: [{
     name: 'fishcake-backend',
-    script: './backend/dist/server.js',
+    script: './dist/server.js',
     cwd: './backend',
     instances: 1,
     exec_mode: 'fork',
-    env_file: './backend/.env',
+    env_file: './.env',
     env: {
       NODE_ENV: 'production',
       PORT: 3001
