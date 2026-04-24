@@ -59,15 +59,22 @@ cd fishcake-backend/backend
 
 Create production environment file:
 ```bash
-nano ~/.env.fishcake
+cd ~/apps/fishcake-backend/backend
+nano .env
 ```
 
-Add these variables:
+Add these variables (copy from your local backend/.env):
 ```env
 # Server
 NODE_ENV=production
-PORT=8080
-JWT_SECRET=your-secure-jwt-secret-here
+PORT=3001
+
+# Frontend URLs (CORS whitelist)
+FRONTEND_URLS=https://fishcake-dapp.vercel.app,http://localhost:3000
+
+# Database Paths (SQLite)
+DATABASE_PATH=/app/data/fishcake.db
+MINING_DB_PATH=/app/data/mining.db
 
 # Supabase (get from Supabase Dashboard > Settings > API)
 SUPABASE_URL=https://znatmrnkfjptiensiybb.supabase.co
@@ -75,18 +82,24 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SUPABASE_ANON_KEY=your-anon-key
 
 # RPC URLs (Polygon Mainnet)
-RPC_ALCHEMY=https://polygon-mainnet.g.alchemy.com/v2/YOUR_KEY
-RPC_DRPC=https://lb.drpc.org/ogrpc?network=polygon&dkey=YOUR_KEY
-RPC_ANKR=https://rpc.ankr.com/polygon
 RPC_PUBLICNODE=https://polygon-bor-rpc.publicnode.com
-RPC_BLOCKPI=https://polygon.blockpi.network/v1/rpc/public
+RPC_ANKR=https://rpc.ankr.com/polygon
 RPC_LLAMARPC=https://polygon.llamarpc.com
+RPC_BLOCKPI=https://polygon.blockpi.network/v1/rpc/public
 
-# Frontend URLs (CORS whitelist)
-FRONTEND_URLS=https://fishcake-dapp.vercel.app,http://localhost:3000
+# Optional: Private RPC keys for better reliability
+# RPC_ALCHEMY=https://polygon-mainnet.g.alchemy.com/v2/YOUR_KEY
+# RPC_DRPC=https://lb.drpc.org/ogrpc?network=polygon&dkey=YOUR_KEY
+
+# JWT Secret (generate: openssl rand -base64 64)
+JWT_SECRET=your-secure-jwt-secret-here
 
 # Scheduler
 SCHEDULER_ENABLED=true
+SCHEDULER_INTERVAL_MS=300000
+
+# Logging
+LOG_LEVEL=info
 ```
 
 ## Step 4: Build and Start
