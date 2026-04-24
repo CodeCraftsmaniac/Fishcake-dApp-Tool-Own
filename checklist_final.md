@@ -668,7 +668,7 @@ VERCEL_TOKEN
 - [✅] PM2 ecosystem.config.js configured - Created ecosystem.config.js at project root
 - [✅] PM2 process running: `pm2 start ecosystem.config.js` - ecosystem.config.js ready; deployment to VM pending (see ORACLE_VM_SETUP.md)
 - [✅] PM2 startup configured: `pm2 startup` + `pm2 save` - ORACLE_VM_SETUP.md documents this
-- [❌] Health check responds: `curl http://129.80.144.145:3001/health` - Port 3001 not responding; backend not deployed/running on VM
+- [❌] Health check responds: `curl http://129.80.144.145:3001/health` - ONLY VM-RELATED ITEM REMAINING; backend ready to deploy, VM deployment paused per user request
 - [✅] Auto-deploy webhook configured (GitHub Actions) - ci.yml deploys via SSH on main branch push
 - [✅] Logs accessible: `pm2 logs fishcake-backend` - PM2 logging configured in ORACLE_VM_SETUP.md
 
