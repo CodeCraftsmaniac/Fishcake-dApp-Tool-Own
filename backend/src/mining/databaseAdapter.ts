@@ -445,6 +445,18 @@ export const schedulerOps = {
     
     if (error) throw error;
   },
+
+  async updatePassphraseHash(passphraseHash: string): Promise<void> {
+    const { error } = await db()
+      .from('scheduler_state')
+      .update({
+        passphrase_hash: passphraseHash,
+        updated_at: Math.floor(Date.now() / 1000),
+      })
+      .eq('id', 1);
+    
+    if (error) throw error;
+  },
 };
 
 /**
@@ -740,6 +752,64 @@ export const statsOps = {
       fcc_distributed: fccDistributed,
       rewards_collected: rewardsCollected,
       success_rate: successRate,
+    };
+  },
+
+  async getForWallet(walletId: number): Promise<{
+    totalEvents: number;
+    ongoingEvents: number;
+    finishedEvents: number;
+    totalFccMined: string;
+    miningDays: number;
+  }> {
+    const { count: totalEvents } = await db()
+      .from('mining_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('wallet_id', walletId);
+
+    const { count: finishedEvents } = await db()
+      .from('mining_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('wallet_id', walletId)
+      .eq('status', 'FINISHED');
+
+    const { count: ongoingEvents } = await db()
+      .from('mining_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('wallet_id', walletId)
+      .neq('status', 'FINISHED');
+
+    const { data: finishedData } = await db()
+      .from('mining_events')
+      .select('total_dropped, reward_received')
+      .eq('wallet_id', walletId)
+      .eq('status', 'FINISHED');
+
+    let totalFccMined = 0;
+    if (finishedData) {
+      for (const e of finishedData) {
+        if (e.reward_received) totalFccMined += parseFloat(e.reward_received);
+      }
+    }
+
+    // Calculate mining days from first event
+    const { data: firstEvent } = await db()
+      .from('mining_events')
+      .select('created_at')
+      .eq('wallet_id', walletId)
+      .order('created_at', { ascending: true })
+      .limit(1);
+
+    const miningDays = firstEvent && firstEvent.length > 0
+      ? Math.max(1, Math.floor((Date.now() / 1000 - firstEvent[0].created_at) / 86400))
+      : 0;
+
+    return {
+      totalEvents: totalEvents || 0,
+      ongoingEvents: ongoingEvents || 0,
+      finishedEvents: finishedEvents || 0,
+      totalFccMined: totalFccMined.toString(),
+      miningDays,
     };
   },
 };

@@ -48,7 +48,6 @@
     "e2e": "tsx scripts/e2e-test.ts",
     "db:push": "tsx scripts/push-supabase-schema.ts",
     "db:test": "tsx scripts/test-supabase-db.ts",
-    "migrate": "tsx scripts/migrate-to-supabase.ts",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

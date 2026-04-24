@@ -120,6 +120,15 @@ let activeRpcUrl: string = "";
 // Export for external use
 export { RPC_ENDPOINTS };
 
+/**
+ * Set the active RPC URL manually
+ */
+export function setRpcUrl(url: string): void {
+  activeRpcUrl = url;
+  activeProvider = new JsonRpcProvider(url);
+  logger.info(`RPC manually switched to: ${url}`);
+}
+
 // Configuration
 const CONFIG = {
   HEALTH_CHECK_INTERVAL: 30000, // 30 seconds

@@ -4,7 +4,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { useMiningStore } from '@/lib/stores/miningStore';
 import { useUIStore } from '@/lib/stores';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://129.213.138.245:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export function useMiningSSE() {
   const addLog = useMiningStore((s) => s.addLog);

@@ -13,6 +13,8 @@ import {
   eventOps,
   logOps,
   statsOps,
+  schedulerOps,
+  refreshTokenOps,
   MiningWallet,
 } from './databaseAdapter.js';
 import { importWallets, WalletImportResult } from './walletServiceAsync.js';
@@ -636,6 +638,283 @@ router.get('/rpc/current', (_req: Request, res: Response) => {
       success: false, 
       error: (error as Error).message 
     });
+  }
+});
+
+/**
+ * POST /api/mining/rpc/switch
+ * Switch to a specific RPC endpoint
+ */
+router.post('/rpc/switch', async (req: Request, res: Response) => {
+  try {
+    const { rpcUrl } = req.body;
+    if (!rpcUrl) {
+      return res.status(400).json({ success: false, error: 'rpcUrl is required' });
+    }
+    const { setRpcUrl } = await import('../blockchain/rpcManager.js');
+    setRpcUrl(rpcUrl);
+    miningScheduler.setRpcUrl(rpcUrl);
+    res.json({ success: true, currentRpc: rpcUrl });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/mining/wallets/:address/balances
+ * Get wallet balances (POL, FCC, USDT)
+ */
+router.get('/wallets/:address/balances', async (req: Request, res: Response) => {
+  try {
+    const address = req.params.address as string;
+    const { getSmartProvider } = await import('../blockchain/rpcManager.js');
+    const provider = await getSmartProvider();
+
+    const ERC20_ABI = [
+      'function balanceOf(address) view returns (uint256)',
+    ];
+
+    const polBalance = await provider.getBalance(address);
+
+    const fccContract = new ethers.Contract(
+      '0x84eBc138F4Ab844A3050a6059763D269dC9951c6',
+      ERC20_ABI,
+      provider
+    );
+    const fccBalance = await fccContract.balanceOf(address);
+
+    const usdtContract = new ethers.Contract(
+      '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+      ERC20_ABI,
+      provider
+    );
+    const usdtBalance = await usdtContract.balanceOf(address);
+
+    res.json({
+      success: true,
+      data: {
+        pol: ethers.formatEther(polBalance),
+        fcc: ethers.formatUnits(fccBalance, 6),
+        usdt: ethers.formatUnits(usdtBalance, 6),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/mining/stats/:address
+ * Get mining stats for a specific wallet address
+ */
+router.get('/stats/:address', async (req: Request, res: Response) => {
+  try {
+    const address = req.params.address as string;
+    const wallet = await walletOps.getByAddress(address);
+    if (!wallet) {
+      return res.status(404).json({ success: false, error: 'Wallet not found' });
+    }
+    const stats = await statsOps.getForWallet(wallet.id);
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/mining/events/wallet/:address
+ * Get events for a specific wallet (by address)
+ */
+router.get('/events/wallet/:address', async (req: Request, res: Response) => {
+  try {
+    const address = req.params.address as string;
+    const wallet = await walletOps.getByAddress(address);
+    if (!wallet) {
+      return res.status(404).json({ success: false, error: 'Wallet not found' });
+    }
+    const events = await eventOps.getByWallet(wallet.id);
+    res.json({ success: true, data: events });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/mining/workflows
+ * Get all workflow statuses
+ */
+router.get('/workflows', async (_req: Request, res: Response) => {
+  try {
+    const wallets = await walletOps.getActive();
+    const workflows = [];
+    for (const wallet of wallets) {
+      const events = await eventOps.getByWallet(wallet.id);
+      const latestEvent = events && events.length > 0 ? events[0] : null;
+      workflows.push({
+        walletAddress: wallet.address,
+        steps: latestEvent ? [
+          { name: 'Event Created', status: 'completed', timestamp: new Date((latestEvent.started_at || 0) * 1000).toISOString() },
+          { name: 'Drop 1', status: latestEvent.drop_1_completed ? 'completed' : 'pending', txHash: latestEvent.drop_1_tx_hash },
+          { name: 'Drop 2', status: latestEvent.drop_2_completed ? 'completed' : 'pending', txHash: latestEvent.drop_2_tx_hash },
+          { name: 'Reward', status: latestEvent.reward_received ? 'completed' : 'pending' },
+          { name: 'Finish', status: latestEvent.status === 'FINISHED' ? 'completed' : latestEvent.status?.toLowerCase() || 'pending' },
+        ] : [],
+      });
+    }
+    res.json({ success: true, data: workflows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/mining/workflows/:address
+ * Get workflow for a specific wallet
+ */
+router.get('/workflows/:address', async (req: Request, res: Response) => {
+  try {
+    const address = req.params.address as string;
+    const wallet = await walletOps.getByAddress(address);
+    if (!wallet) {
+      return res.status(404).json({ success: false, error: 'Wallet not found' });
+    }
+    const events = await eventOps.getByWallet(wallet.id);
+    const latestEvent = events && events.length > 0 ? events[0] : null;
+    const workflow = {
+      walletAddress: wallet.address,
+      steps: latestEvent ? [
+        { name: 'Event Created', status: 'completed', timestamp: new Date((latestEvent.started_at || 0) * 1000).toISOString() },
+        { name: 'Drop 1', status: latestEvent.drop_1_completed ? 'completed' : 'pending', txHash: latestEvent.drop_1_tx_hash },
+        { name: 'Drop 2', status: latestEvent.drop_2_completed ? 'completed' : 'pending', txHash: latestEvent.drop_2_tx_hash },
+        { name: 'Reward', status: latestEvent.reward_received ? 'completed' : 'pending' },
+        { name: 'Finish', status: latestEvent.status === 'FINISHED' ? 'completed' : latestEvent.status?.toLowerCase() || 'pending' },
+      ] : [],
+    };
+    res.json({ success: true, data: workflow });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/mining/metrics
+ * Get aggregate mining metrics
+ */
+router.get('/metrics', async (_req: Request, res: Response) => {
+  try {
+    const overview = await statsOps.getOverview();
+    res.json({
+      success: true,
+      data: {
+        totalEvents: overview.events_total || 0,
+        totalFCCDistributed: overview.fcc_distributed || 0,
+        totalMiningRewards: overview.rewards_collected || 0,
+        activeWallets: overview.active_wallets || 0,
+        failedEvents: 0,
+        completedDrops: 0,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/mining/auth/login
+ * Login with passphrase to get JWT tokens
+ */
+router.post('/auth/login', async (req: Request, res: Response) => {
+  try {
+    const { passphrase } = req.body;
+    if (!passphrase) {
+      return res.status(400).json({ success: false, error: 'Passphrase required' });
+    }
+
+    const crypto = await import('crypto');
+    const hash = crypto.createHash('sha256').update(passphrase).digest('hex');
+
+    const state = await schedulerOps.get();
+    if (!state?.passphrase_hash) {
+      // No passphrase set yet - store this one as the initial passphrase
+      await schedulerOps.updatePassphraseHash(hash);
+    } else if (hash !== state.passphrase_hash) {
+      return res.status(401).json({ success: false, error: 'Invalid passphrase' });
+    }
+
+    const jwt = await import('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+    const userId = 'admin';
+
+    const accessToken = jwt.sign({ userId, type: 'access' }, JWT_SECRET, { expiresIn: '15m' });
+    const refreshToken = jwt.sign({ userId, type: 'refresh' }, JWT_SECRET, { expiresIn: '7d' });
+
+    // Store refresh token in Supabase
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const sessionId = crypto.randomUUID();
+    await refreshTokenOps.store(refreshTokenHash, userId, sessionId, Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
+
+    res.json({
+      success: true,
+      data: {
+        accessToken,
+        refreshToken,
+        expiresIn: 900, // 15 minutes
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/mining/auth/refresh
+ * Refresh access token using refresh token
+ */
+router.post('/auth/refresh', async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, error: 'Refresh token required' });
+    }
+
+    const jwt = await import('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+
+    // Verify the refresh token
+    const decoded = jwt.verify(refreshToken, JWT_SECRET) as { userId: string; type: string };
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({ success: false, error: 'Invalid token type' });
+    }
+
+    // Check if refresh token exists in database
+    const crypto = await import('crypto');
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const storedToken = await refreshTokenOps.getByHash(refreshTokenHash);
+    if (!storedToken) {
+      return res.status(401).json({ success: false, error: 'Refresh token not found' });
+    }
+
+    // Generate new token pair
+    const userId = decoded.userId;
+    const newAccessToken = jwt.sign({ userId, type: 'access' }, JWT_SECRET, { expiresIn: '15m' });
+    const newRefreshToken = jwt.sign({ userId, type: 'refresh' }, JWT_SECRET, { expiresIn: '7d' });
+
+    // Replace old refresh token with new one
+    await refreshTokenOps.deleteByHash(refreshTokenHash);
+    const newRefreshTokenHash = crypto.createHash('sha256').update(newRefreshToken).digest('hex');
+    const newSessionId = crypto.randomUUID();
+    await refreshTokenOps.store(newRefreshTokenHash, userId, newSessionId, Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
+
+    res.json({
+      success: true,
+      data: {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        expiresIn: 900,
+      },
+    });
+  } catch (error) {
+    res.status(401).json({ success: false, error: (error as Error).message });
   }
 });
 
