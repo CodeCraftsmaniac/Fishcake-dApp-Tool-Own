@@ -133,7 +133,7 @@ export async function rotateEncryptionKey(newKey: string): Promise<KeyRotationRe
           salt: reEncrypted.salt,
           iv: reEncrypted.iv,
           auth_tag: reEncrypted.authTag,
-          updated_at: Math.floor(Date.now() / 1000),
+          updated_at: new Date().toISOString(),
         })
         .eq('id', wallet.id);
 

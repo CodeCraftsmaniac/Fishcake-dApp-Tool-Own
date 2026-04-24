@@ -227,7 +227,6 @@ export const walletOps = {
 
   async getReadyForEvent(offsetMinutes: number, limit: number): Promise<MiningWallet[]> {
     const now = Math.floor(Date.now() / 1000);
-    const minTime = now - (offsetMinutes * 60);
     
     // Get active wallets that are ready for a new event
     const { data, error } = await db()
@@ -406,15 +405,16 @@ export const schedulerOps = {
   },
 
   async start(passphraseHash: string): Promise<void> {
-    const now = Math.floor(Date.now() / 1000);
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const nowISO = new Date().toISOString();
     const { error } = await db()
       .from('scheduler_state')
       .update({
         is_running: true,
         passphrase_hash: passphraseHash,
-        started_at: now,
-        last_tick_at: now,
-        updated_at: now,
+        started_at: nowUnix,
+        last_tick_at: nowUnix,
+        updated_at: nowISO,
       })
       .eq('id', 1);
     
@@ -451,7 +451,7 @@ export const schedulerOps = {
       .from('scheduler_state')
       .update({
         passphrase_hash: passphraseHash,
-        updated_at: Math.floor(Date.now() / 1000),
+        updated_at: new Date().toISOString(),
       })
       .eq('id', 1);
     
@@ -465,6 +465,7 @@ export const schedulerOps = {
 export const eventOps = {
   async insert(walletId: number): Promise<number> {
     const now = Math.floor(Date.now() / 1000);
+    const nowISO = new Date().toISOString();
     const { data, error } = await db()
       .from('mining_events')
       .insert({
@@ -472,8 +473,8 @@ export const eventOps = {
         status: 'PENDING',
         started_at: now,
         drops_checklist: '0/2',
-        created_at: now,
-        updated_at: now,
+        created_at: nowISO,
+        updated_at: nowISO,
       })
       .select('id')
       .single();
@@ -559,6 +560,7 @@ export const eventOps = {
 
   async updateDrop2(id: number, txHash: string, amount: string, total: string): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
+    const nowISO = new Date().toISOString();
     const { error } = await db()
       .from('mining_events')
       .update({
@@ -569,7 +571,7 @@ export const eventOps = {
         total_dropped: total,
         status: 'DROPS_COMPLETE',
         drops_completed_at: now,
-        updated_at: now,
+        updated_at: nowISO,
       })
       .eq('id', id);
     
@@ -578,6 +580,7 @@ export const eventOps = {
 
   async updateReward(id: number, amount: string): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
+    const nowISO = new Date().toISOString();
     const { error } = await db()
       .from('mining_events')
       .update({
@@ -585,7 +588,7 @@ export const eventOps = {
         reward_received: amount,
         status: 'MINING_COMPLETE',
         reward_received_at: now,
-        updated_at: now,
+        updated_at: nowISO,
       })
       .eq('id', id);
     
@@ -594,12 +597,13 @@ export const eventOps = {
 
   async finish(id: number): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
+    const nowISO = new Date().toISOString();
     const { error } = await db()
       .from('mining_events')
       .update({
         status: 'FINISHED',
         finished_at: now,
-        updated_at: now,
+        updated_at: nowISO,
       })
       .eq('id', id);
     
@@ -708,12 +712,12 @@ export const statsOps = {
     
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const todayUnix = Math.floor(todayStart.getTime() / 1000);
+    const todayISO = todayStart.toISOString();
     
     const { count: eventsToday } = await db()
       .from('mining_events')
       .select('*', { count: 'exact', head: true })
-      .gte('created_at', todayUnix);
+      .gte('created_at', todayISO);
     
     // Get finished events for totals
     const { data: finishedEvents } = await db()
@@ -801,7 +805,7 @@ export const statsOps = {
       .limit(1);
 
     const miningDays = firstEvent && firstEvent.length > 0
-      ? Math.max(1, Math.floor((Date.now() / 1000 - firstEvent[0].created_at) / 86400))
+      ? Math.max(1, Math.floor((Date.now() - new Date(firstEvent[0].created_at).getTime()) / 86400000))
       : 0;
 
     return {

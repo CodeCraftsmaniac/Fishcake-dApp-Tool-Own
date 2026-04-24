@@ -510,9 +510,7 @@ router.get('/wallets/:address/stats', async (req: Request, res: Response) => {
       totalEvents: events.length,
       ongoingEvents: ongoingEvents.length,
       finishedEvents: finishedEvents.length,
-      passExpiry: wallet.nft_expiry_at 
-        ? new Date(wallet.nft_expiry_at * 1000).toISOString()
-        : null,
+      passExpiry: wallet.nft_expiry_at || null,
     };
 
     res.json({ success: true, data: stats });
@@ -841,7 +839,8 @@ router.post('/auth/login', async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, error: 'Invalid passphrase' });
     }
 
-    const jwt = await import('jsonwebtoken');
+    const jwtModule = await import('jsonwebtoken');
+    const jwt = jwtModule.default || jwtModule;
     const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
     const userId = 'admin';
 
@@ -877,7 +876,8 @@ router.post('/auth/refresh', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Refresh token required' });
     }
 
-    const jwt = await import('jsonwebtoken');
+    const jwtModule = await import('jsonwebtoken');
+    const jwt = jwtModule.default || jwtModule;
     const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 
     // Verify the refresh token
