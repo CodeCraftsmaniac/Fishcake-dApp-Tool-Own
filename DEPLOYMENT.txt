@@ -4,124 +4,125 @@ FISHCAKE DAPP - PRODUCTION DEPLOYMENT
 ARCHITECTURE:
 -------------
 Frontend: Vercel (Next.js)
-Backend: Railway (Node.js/Express)
-Database: SQLite (Railway persistent storage)
+Backend: Oracle Cloud VM (Node.js/Express + PM2)
+Database: Supabase (PostgreSQL)
 Blockchain: Polygon Mainnet
 
 LIVE URLS:
 ----------
 Frontend: https://fishcake-dapp.vercel.app
-Backend API: https://fishcake-dapp-tool-production.up.railway.app
-Health Check: https://fishcake-dapp-tool-production.up.railway.app/health
+Backend API: http://129.80.144.145:3001
+Health Check: http://129.80.144.145:3001/health
 
 DEPLOYMENT STATUS:
 ------------------
-✅ Frontend: Auto-deploys from GitHub (main branch)
-✅ Backend: Auto-deploys from GitHub (main branch)
-✅ Database: Persistent storage on Railway
-✅ CORS: Configured for all Vercel URLs
-✅ SSL/HTTPS: Enabled on both frontend and backend
-✅ Environment Variables: Set in Railway dashboard
+✅ Frontend: Auto-deploys from GitHub (main branch) via Vercel
+✅ Backend: Auto-deploys from GitHub (main branch) via GitHub Actions SSH
+✅ Database: Supabase PostgreSQL (persistent, auto-backup)
+✅ CORS: Configured for Vercel URLs
+✅ SSL/HTTPS: Vercel auto-SSL; VM uses HTTP (add Nginx+Let's Encrypt for HTTPS)
+✅ Environment Variables: Set in backend/.env on VM
 
 BACKEND FEATURES:
 -----------------
 ✅ Mining automation engine
-✅ Scheduler (cron-based)
-✅ Wallet processing
-✅ Blockchain interaction (4/6 RPC healthy)
-✅ SQLite database with WAL mode
-✅ Multi-RPC failover
-✅ Health monitoring
-✅ Auto-restart on failure
+✅ Scheduler (interval-based, persists to Supabase)
+✅ Wallet processing (AES-256-GCM encryption)
+✅ Blockchain interaction (5 RPC endpoints with failover)
+✅ Supabase PostgreSQL database (7 tables + 2 utility tables)
+✅ Multi-RPC failover with health monitoring
+✅ JWT authentication with refresh tokens
+✅ SSE real-time updates
+✅ Auto-restart on failure (PM2)
 
-ENVIRONMENT VARIABLES (Railway):
---------------------------------
+ENVIRONMENT VARIABLES (Oracle VM .env):
+----------------------------------------
 NODE_ENV=production
-PORT=8080 (auto-assigned by Railway)
-FRONTEND_URLS=https://fishcake-dapp.vercel.app,...
-DATABASE_PATH=/app/data/fishcake.db
-MINING_DB_PATH=/app/data/mining.db
-JWT_SECRET=<random-string>
+PORT=3001
+FRONTEND_URLS=https://fishcake-dapp.vercel.app
+SUPABASE_URL=https://znatmrnkfjptiensiybb.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<from-supabase-dashboard>
+SUPABASE_ANON_KEY=<from-supabase-dashboard>
+JWT_SECRET=<generate-with-openssl-rand-base64-64>
 RPC_PUBLICNODE=https://polygon-bor-rpc.publicnode.com
 RPC_ANKR=https://rpc.ankr.com/polygon
+RPC_LLAMARPC=https://polygon.llamarpc.com
+RPC_BLOCKPI=https://polygon.blockpi.network/v1/rpc/public
 SCHEDULER_ENABLED=true
+SCHEDULER_INTERVAL_MS=300000
 LOG_LEVEL=info
 
 MONITORING:
 -----------
-Backend Health: curl https://fishcake-dapp-tool-production.up.railway.app/health
-RPC Status: curl https://fishcake-dapp-tool-production.up.railway.app/api/mining/rpc/status
-Mining Status: curl https://fishcake-dapp-tool-production.up.railway.app/api/mining/status
+Backend Health: curl http://129.80.144.145:3001/health
+RPC Status: curl http://129.80.144.145:3001/api/mining/rpc/status
+Mining Status: curl http://129.80.144.145:3001/api/mining/status
+PM2 Logs: pm2 logs fishcake-backend
 
 DEPLOYMENT PROCESS:
 -------------------
 1. Push to GitHub main branch
-2. Railway auto-detects changes
-3. Builds backend (npm install && npm run build)
-4. Deploys to production
+2. GitHub Actions CI runs (build, lint, test)
+3. GitHub Actions SSH deploys to Oracle VM
+4. PM2 restarts the backend service
 5. Health check passes
-6. Traffic routed to new deployment
-
-NO LOCAL DEPENDENCIES:
-----------------------
-✅ No localhost references
-✅ No local file paths
-✅ All URLs are production URLs
-✅ Environment variables for all configs
-✅ Cloud-based database storage
 
 COST ESTIMATE:
 --------------
-Railway: ~$11-14/month (512MB RAM, always-on)
+Oracle Cloud VM: Free (Always Free tier, 1GB RAM)
+Supabase: Free (500MB database, 50K API requests/month)
 Vercel: Free (Hobby plan)
-Total: ~$11-14/month
+Total: $0/month
 
 BACKUP & RECOVERY:
 ------------------
-Database: SQLite files in /app/data/ (Railway persistent storage)
+Database: Supabase auto-backup (daily on Pro, manual on Free)
 Code: GitHub repository (main branch)
-Logs: Railway dashboard (last 7 days)
+Logs: PM2 logs on VM (last 7 days by default)
+VM Data: No local data (all in Supabase)
 
 SCALING:
 --------
-Current: 512MB RAM, 1 instance
-Can scale to: 8GB RAM, multiple regions
-Auto-restart: Enabled (max 10 retries)
+Current: 1GB RAM VM, 1 PM2 instance
+Can scale to: Larger VM, multiple PM2 instances
+Auto-restart: PM2 (max 5 retries, 3s delay)
 
 SECURITY:
 ---------
-✅ HTTPS enforced
-✅ CORS restricted to Vercel domains
 ✅ Helmet security headers
-✅ JWT authentication ready
-✅ Environment variables for secrets
+✅ CORS restricted to Vercel domains
+✅ JWT authentication with refresh tokens
+✅ AES-256-GCM wallet key encryption
+✅ Environment variables for secrets (.env, gitignored)
 ✅ No hardcoded credentials
+⚠️  HTTPS on VM: Add Nginx reverse proxy + Let's Encrypt
 
 MAINTENANCE:
 ------------
-- Monitor Railway dashboard for errors
 - Check health endpoint daily
+- Review PM2 logs for errors: pm2 logs fishcake-backend
 - Review RPC status weekly
 - Update dependencies monthly
-- Backup database weekly (if needed)
+- Monitor Supabase dashboard for DB health
 
 TROUBLESHOOTING:
 ----------------
 If backend is down:
-1. Check Railway dashboard for errors
-2. Check health endpoint
-3. Review deployment logs
-4. Verify environment variables
-5. Check RPC endpoints status
+1. SSH into VM: ssh -i ~/.ssh/oracle_fcc_bot_v3 opc@129.80.144.145
+2. Check PM2: pm2 status
+3. Check logs: pm2 logs fishcake-backend
+4. Restart: pm2 restart fishcake-backend
+5. Check health: curl http://localhost:3001/health
 
 If frontend can't connect:
-1. Verify NEXT_PUBLIC_API_URL is set
-2. Check CORS configuration
+1. Verify NEXT_PUBLIC_API_URL points to VM
+2. Check CORS configuration in .env
 3. Test backend health endpoint
 4. Check browser console for errors
 
 SUPPORT:
 --------
-Railway: https://railway.app/dashboard
+Supabase: https://supabase.com/dashboard/project/znatmrnkfjptiensiybb
 Vercel: https://vercel.com/dashboard
+Oracle Cloud: https://cloud.oracle.com
 GitHub: https://github.com/CodeCraftsmaniac/Fishcake-dApp-Tool-Own

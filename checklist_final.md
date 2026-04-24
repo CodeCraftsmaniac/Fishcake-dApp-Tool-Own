@@ -76,9 +76,9 @@ npm run db:test
 cd backend
 # .env file already created with all required values:
 # - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
-# - JWT_SECRET (fishcake-railway-production-secret-2026)
+# - JWT_SECRET (fishcake-oracle-vm-production-secret-2026)
 # - All RPC endpoints (Alchemy, Ankr, LlamaRPC, BlockPi, PublicNode)
-# - DATABASE_PATH, MINING_DB_PATH, FRONTEND_URLS
+# - FRONTEND_URLS
 ```
 
 **Web-App (.env.local):**

@@ -1,5 +1,6 @@
 /**
  * Log cleanup scheduler - automatically removes old logs and completed events.
+ * Uses Supabase for all database operations.
  */
 
 import logger from './logger.js';
@@ -11,32 +12,47 @@ const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 let cleanupInterval: NodeJS.Timeout | null = null;
 
 /**
- * Clean up old logs and archived events from database.
- * This function performs raw SQL cleanup via the database connection.
- * For SQLite: directly execute DELETE statements.
- * For Supabase: use the Supabase client with .delete().lt() filters.
+ * Clean up old logs and archived events from Supabase database.
  */
 export async function cleanupOldData(): Promise<{ logsDeleted: number; eventsArchived: number }> {
   try {
-    const logCutoff = Math.floor(Date.now() / 1000) - LOG_RETENTION_DAYS * 24 * 60 * 60;
-    const eventCutoff = Math.floor(Date.now() / 1000) - EVENT_RETENTION_DAYS * 24 * 60 * 60;
+    const { supabase } = await import('../mining/databaseAdapter.js');
+    const logCutoff = new Date(Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const eventCutoff = new Date(Date.now() - EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     let logsDeleted = 0;
     let eventsArchived = 0;
 
-    // For SQLite backend, try direct SQL cleanup
+    // Delete old logs
     try {
-      const { db } = await import('../mining/database.js');
-      if (db) {
-        const logResult = db.prepare('DELETE FROM mining_logs WHERE created_at < ?').run(logCutoff);
-        logsDeleted = logResult.changes || 0;
+      const { count } = await supabase()
+        .from('mining_logs')
+        .delete({ count: 'exact' })
+        .lt('created_at', logCutoff);
+      logsDeleted = count || 0;
+    } catch (error) {
+      logger.error('Failed to cleanup logs:', { error: (error as Error).message });
+    }
 
-        const eventResult = db.prepare('UPDATE mining_events SET status = ? WHERE status = ? AND created_at < ?')
-          .run('archived', 'finished', eventCutoff);
-        eventsArchived = eventResult.changes || 0;
-      }
+    // Archive old finished events
+    try {
+      const { count } = await supabase()
+        .from('mining_events')
+        .update({ status: 'ARCHIVED' })
+        .eq('status', 'FINISHED')
+        .lt('created_at', eventCutoff)
+        .neq('status', 'ARCHIVED');
+      eventsArchived = (count as number) || 0;
+    } catch (error) {
+      logger.error('Failed to archive events:', { error: (error as Error).message });
+    }
+
+    // Cleanup expired refresh tokens
+    try {
+      const { refreshTokenOps } = await import('../mining/databaseAdapter.js');
+      await refreshTokenOps.cleanupExpired();
     } catch {
-      // SQLite not available, try Supabase
+      // Non-critical
     }
 
     logger.info('Data cleanup completed', { logsDeleted, eventsArchived });

@@ -744,4 +744,190 @@ export const statsOps = {
   },
 };
 
+/**
+ * Drop Operations
+ */
+export interface MiningDrop {
+  id: number;
+  event_id: number;
+  recipient_address: string;
+  amount: string;
+  drop_number: number;
+  tx_hash: string | null;
+  block_number: number | null;
+  gas_used: string | null;
+  status: string;
+  error_message: string | null;
+  created_at: number;
+  confirmed_at: number | null;
+}
+
+export const dropOps = {
+  async insert(eventId: number, recipientAddress: string, amount: string, dropNumber: number): Promise<MiningDrop> {
+    const { data, error } = await db()
+      .from('mining_drops')
+      .insert({
+        event_id: eventId,
+        recipient_address: recipientAddress,
+        amount,
+        drop_number: dropNumber,
+        status: 'PENDING',
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data as MiningDrop;
+  },
+
+  async getByEvent(eventId: number): Promise<MiningDrop[]> {
+    const { data, error } = await db()
+      .from('mining_drops')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('drop_number');
+    
+    if (error) throw error;
+    return (data || []) as MiningDrop[];
+  },
+
+  async updateStatus(id: number, status: string, txHash?: string, blockNumber?: number, gasUsed?: string): Promise<void> {
+    const update: Record<string, unknown> = { status };
+    if (txHash) update.tx_hash = txHash;
+    if (blockNumber) update.block_number = blockNumber;
+    if (gasUsed) update.gas_used = gasUsed;
+    if (status === 'CONFIRMED') update.confirmed_at = Math.floor(Date.now() / 1000);
+    
+    const { error } = await db()
+      .from('mining_drops')
+      .update(update)
+      .eq('id', id);
+    
+    if (error) throw error;
+  },
+
+  async updateError(id: number, errorMessage: string): Promise<void> {
+    const { error } = await db()
+      .from('mining_drops')
+      .update({ status: 'FAILED', error_message: errorMessage })
+      .eq('id', id);
+    
+    if (error) throw error;
+  },
+};
+
+/**
+ * Refresh Token Operations (for JWT persistence)
+ */
+export const refreshTokenOps = {
+  async store(tokenHash: string, userId: string, sessionId: string, expiresAt: number): Promise<void> {
+    const { error } = await db()
+      .from('refresh_tokens')
+      .insert({
+        token_hash: tokenHash,
+        user_id: userId,
+        session_id: sessionId,
+        expires_at: expiresAt,
+      });
+    
+    if (error) throw error;
+  },
+
+  async getByHash(tokenHash: string): Promise<{ token_hash: string; user_id: string; session_id: string; expires_at: number } | null> {
+    const { data, error } = await db()
+      .from('refresh_tokens')
+      .select('*')
+      .eq('token_hash', tokenHash)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return data as { token_hash: string; user_id: string; session_id: string; expires_at: number } | null;
+  },
+
+  async deleteByHash(tokenHash: string): Promise<void> {
+    const { error } = await db()
+      .from('refresh_tokens')
+      .delete()
+      .eq('token_hash', tokenHash);
+    
+    if (error) throw error;
+  },
+
+  async deleteByUserId(userId: string): Promise<void> {
+    const { error } = await db()
+      .from('refresh_tokens')
+      .delete()
+      .eq('user_id', userId);
+    
+    if (error) throw error;
+  },
+
+  async cleanupExpired(): Promise<number> {
+    const now = Math.floor(Date.now() / 1000);
+    const { error, count } = await db()
+      .from('refresh_tokens')
+      .delete({ count: 'exact' })
+      .lt('expires_at', now);
+    
+    if (error) throw error;
+    return count || 0;
+  },
+};
+
+/**
+ * Nonce Operations (for nonce persistence across restarts)
+ */
+export const nonceOps = {
+  async get(address: string): Promise<{ address: string; nonce: number; pending_count: number; last_updated: number } | null> {
+    const { data, error } = await db()
+      .from('pending_nonces')
+      .select('*')
+      .eq('address', address)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return data as { address: string; nonce: number; pending_count: number; last_updated: number } | null;
+  },
+
+  async upsert(address: string, nonce: number, pendingCount: number, lastUpdated: number): Promise<void> {
+    const { error } = await db()
+      .from('pending_nonces')
+      .upsert({
+        address,
+        nonce,
+        pending_count: pendingCount,
+        last_updated: lastUpdated,
+      }, { onConflict: 'address' });
+    
+    if (error) throw error;
+  },
+
+  async delete(address: string): Promise<void> {
+    const { error } = await db()
+      .from('pending_nonces')
+      .delete()
+      .eq('address', address);
+    
+    if (error) throw error;
+  },
+
+  async clearAll(): Promise<void> {
+    const { error } = await db()
+      .from('pending_nonces')
+      .delete()
+      .neq('address', '');
+    
+    if (error) throw error;
+  },
+
+  async loadAll(): Promise<Array<{ address: string; nonce: number; pending_count: number; last_updated: number }>> {
+    const { data, error } = await db()
+      .from('pending_nonces')
+      .select('*');
+    
+    if (error) throw error;
+    return (data || []) as Array<{ address: string; nonce: number; pending_count: number; last_updated: number }>;
+  },
+};
+
 export default db;

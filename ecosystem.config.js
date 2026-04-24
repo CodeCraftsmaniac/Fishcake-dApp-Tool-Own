@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
     name: 'fishcake-backend',
-    script: './backend/dist/serverSupabase.js',
+    script: './backend/dist/server.js',
     cwd: './backend',
     instances: 1,
     exec_mode: 'fork',
