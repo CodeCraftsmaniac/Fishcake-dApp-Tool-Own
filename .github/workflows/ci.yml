@@ -135,7 +135,7 @@ jobs:
               pm2 startup 2>/dev/null | grep -o 'sudo .*' | bash 2>/dev/null || true
             fi
             # Create app directory
-            mkdir -p ~/fishcake-backend/backend/dist ~/fishcake-backend/backend/node_modules ~/fishcake-backend/data
+            mkdir -p ~/fishcake-backend/backend/dist ~/fishcake-backend/backend/node_modules
             echo "Provisioning done"
           PROVISION
 
@@ -143,11 +143,9 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key $VM_USER@$VM_HOST << ENVFILE
             cat > ~/fishcake-backend/backend/.env << 'EOF'
-            DATABASE_PATH=${{ secrets.DATABASE_PATH }}
             FRONTEND_URLS=${{ secrets.FRONTEND_URLS }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             LOG_LEVEL=${{ secrets.LOG_LEVEL }}
-            MINING_DB_PATH=${{ secrets.MINING_DB_PATH }}
             NODE_ENV=${{ secrets.NODE_ENV }}
             PORT=3001
             RPC_ALCHEMY=${{ secrets.RPC_ALCHEMY }}
@@ -157,6 +155,7 @@ jobs:
             RPC_LLAMARPC=${{ secrets.RPC_LLAMARPC }}
             RPC_PUBLICNODE=${{ secrets.RPC_PUBLICNODE }}
             SCHEDULER_ENABLED=${{ secrets.SCHEDULER_ENABLED }}
+            SCHEDULER_INTERVAL_MS=${{ secrets.SCHEDULER_INTERVAL_MS }}
             SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
             SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
             SUPABASE_URL=${{ secrets.SUPABASE_URL }}
@@ -181,7 +180,7 @@ jobs:
           ssh -i ~/.ssh/deploy_key $VM_USER@$VM_HOST << 'START'
             cd ~/fishcake-backend
             pm2 restart fishcake-backend 2>/dev/null || \
-              pm2 start backend/dist/serverSupabase.js --name fishcake-backend
+              pm2 start backend/dist/server.js --name fishcake-backend
             pm2 save
             pm2 status
           START

@@ -70,11 +70,7 @@ NODE_ENV=production
 PORT=3001
 
 # Frontend URLs (CORS whitelist)
-FRONTEND_URLS=https://fishcake-dapp.vercel.app,http://localhost:3000
-
-# Database Paths (SQLite)
-DATABASE_PATH=/app/data/fishcake.db
-MINING_DB_PATH=/app/data/mining.db
+FRONTEND_URLS=https://fishcake-dapp.vercel.app,http://129.80.144.145:3001
 
 # Supabase (get from Supabase Dashboard > Settings > API)
 SUPABASE_URL=https://znatmrnkfjptiensiybb.supabase.co
