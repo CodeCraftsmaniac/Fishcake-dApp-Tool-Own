@@ -9,7 +9,7 @@
  * - Backup SQLite database before running
  */
 
-import Database from 'better-sqlite3';
+import * as Database from 'better-sqlite3';
 import { createClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 import * as path from 'path';

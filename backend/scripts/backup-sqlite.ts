@@ -7,7 +7,7 @@
  *   List:    npx tsx scripts/backup-sqlite.ts --list
  */
 
-import Database from 'better-sqlite3';
+import * as Database from 'better-sqlite3';
 import * as fs from 'fs';
 import * as path from 'path';
 
