@@ -282,7 +282,8 @@ async function createOnChainEvent(
     2, // 2 recipients
     dropAmount,
     dropAmount,
-    deadline
+    deadline,
+    { gasLimit: 500000 } // Gas limit to prevent griefing (typical createEvent ~250k gas)
   );
 
   const receipt = await tx.wait();
@@ -351,7 +352,9 @@ async function executeDrop(
   });
 
   try {
-    const tx = await eventManager.drop(chainEventId, recipient, dropAmount);
+    const tx = await eventManager.drop(chainEventId, recipient, dropAmount, {
+      gasLimit: 300000, // Gas limit to prevent griefing (typical drop ~150k gas)
+    });
     
     // Wait with timeout
     const receipt = await Promise.race([

@@ -47,6 +47,12 @@
     "server": "node dist/serverSupabase.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:blockchain": "vitest run src/__tests__/blockchain-mock.test.ts",
+    "e2e": "tsx scripts/e2e-test.ts",
+    "migrate": "tsx scripts/migrate-to-supabase.ts",
+    "backup": "tsx scripts/backup-sqlite.ts",
+    "backup:restore": "tsx scripts/backup-sqlite.ts --restore",
+    "backup:list": "tsx scripts/backup-sqlite.ts --list",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

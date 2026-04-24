@@ -81,19 +81,29 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Health check endpoint
 app.get('/health', async (req: Request, res: Response) => {
   try {
+    // Check database connectivity
+    let dbStatus = 'ok';
+    try {
+      const { db } = await import('./mining/database.js');
+      db.prepare('SELECT 1').get();
+    } catch {
+      dbStatus = 'error';
+    }
+
     const rpcStatus = getAllRpcStatus();
     const currentRpc = getCurrentRpc();
     const schedulerStatus = miningScheduler.getStatus();
     // Get active wallet count from prepared statement
     const activeWallets = (walletOps.getActive as { all: () => unknown[] }).all() || [];
     const walletCount = activeWallets.length;
-    
+
     res.json({
-      status: 'healthy',
+      status: dbStatus === 'ok' ? 'healthy' : 'degraded',
       version: BACKEND_VERSION,
       environment: NODE_ENV,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
+      database: dbStatus,
       memory: process.memoryUsage(),
       rpc: {
         current: currentRpc.name,
