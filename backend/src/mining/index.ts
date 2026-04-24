@@ -1,38 +1,24 @@
 // Mining Module Barrel Export
 
-// Database
-export { db, initializeDatabase, walletOps, configOps, eventOps, dropOps, logOps, statsOps, schedulerOps } from './database.js';
+// Database (Supabase)
+export { supabase as db, initializeDatabase, walletOps, configOps, eventOps, dropOps, logOps, statsOps, schedulerOps, refreshTokenOps, nonceOps } from './databaseAdapter.js';
+export type { MiningWallet, MiningConfig, SchedulerState } from './databaseAdapter.js';
 
 // Encryption
 export { encrypt, decrypt, encryptPrivateKey, decryptPrivateKey, verifyPassphrase, generatePassphrase } from './encryption.js';
 export type { EncryptedData } from './encryption.js';
 
-// Wallet Service
+// Wallet Service (Supabase)
 export { 
   importWallets, 
-  getAllWallets, 
-  getActiveWallets, 
-  getReadyWallets,
-  getWalletByAddress,
-  deleteWallet as deleteWalletFromMining,
-  updateWalletStatus,
-  updateWalletNFT,
-  decryptWalletKey,
-  getWalletStats,
-  updateWalletBalances,
-} from './walletService.js';
-export type { WalletImportResult, MiningWallet } from './walletService.js';
+} from './walletServiceAsync.js';
+export type { WalletImportResult } from './walletServiceAsync.js';
 
-// Event Processor
-export { processWallet, getRecentEvents, getEventsByWallet, getMiningStats } from './eventProcessor.js';
-export type { MiningEvent, MiningConfig } from './eventProcessor.js';
+// Event Processor (Supabase)
+export { processWallet } from './eventProcessorAsync.js';
 
-// Scheduler
-export { MiningScheduler, miningScheduler } from './scheduler.js';
+// Scheduler (Supabase)
+export { MiningScheduler, miningScheduler } from './schedulerAsync.js';
 
-// Legacy exports for compatibility
-export { MiningAutomationEngine, miningEngine } from './MiningAutomationEngine.js';
-export type { WorkflowStep } from './MiningAutomationEngine.js';
-
-// Routes
-export { default as miningRoutes } from './miningRoutes.js';
+// Routes (Supabase)
+export { default as miningRoutes } from './miningRoutesAsync.js';

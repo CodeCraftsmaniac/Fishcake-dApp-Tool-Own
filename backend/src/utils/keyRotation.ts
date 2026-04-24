@@ -2,14 +2,13 @@
  * Key rotation mechanism for encryption keys.
  * Supports rotating the ENCRYPTION_KEY used for wallet private key encryption.
  * Rotation creates a new key, re-encrypts all wallets, and archives the old key.
+ * Uses Supabase for all database operations.
  */
 
 import crypto from 'crypto';
-import { db } from '../mining/database.js';
+import { supabase, walletOps } from '../mining/databaseAdapter.js';
 import { encryptPrivateKey, decryptPrivateKey } from '../mining/encryption.js';
 import logger from './logger.js';
-
-const KEY_ROTATION_PREFIX = 'key_rotation_';
 
 export interface KeyRotationResult {
   success: boolean;
@@ -40,29 +39,27 @@ export function generateNewEncryptionKey(): string {
 /**
  * Archive old key hash for audit trail (never store the actual key)
  */
-function archiveOldKeyHash(oldKey: string): void {
+async function archiveOldKeyHash(oldKey: string): Promise<void> {
   const keyHash = crypto.createHash('sha256').update(oldKey).digest('hex');
   const timestamp = Date.now();
 
   try {
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS key_rotation_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        old_key_hash TEXT NOT NULL,
-        new_key_hash TEXT NOT NULL,
-        rotated_at INTEGER NOT NULL,
-        wallets_rotated INTEGER DEFAULT 0,
-        wallets_failed INTEGER DEFAULT 0
-      )
-    `).run();
-
     const newKey = getCurrentKey();
     const newKeyHash = crypto.createHash('sha256').update(newKey).digest('hex');
 
-    db.prepare(`
-      INSERT INTO key_rotation_log (old_key_hash, new_key_hash, rotated_at)
-      VALUES (?, ?, ?)
-    `).run(keyHash, newKeyHash, timestamp);
+    const { error } = await supabase()
+      .from('mining_logs')
+      .insert({
+        wallet_id: null,
+        event_id: null,
+        level: 'INFO',
+        action: 'KEY_ROTATION',
+        message: `Encryption key rotated`,
+        tx_hash: null,
+        metadata: JSON.stringify({ old_key_hash: keyHash, new_key_hash: newKeyHash, rotated_at: timestamp }),
+      });
+
+    if (error) throw error;
 
     logger.info('Archived old encryption key hash', { keyHash: keyHash.slice(0, 16) + '...' });
   } catch (error) {
@@ -105,57 +102,55 @@ export async function rotateEncryptionKey(newKey: string): Promise<KeyRotationRe
   logger.info('Starting encryption key rotation...');
 
   // Get all wallets
-  const wallets = db.prepare(`
-    SELECT id, encrypted_key, salt, iv, auth_tag FROM mining_wallets
-  `).all() as Array<{ id: number; encrypted_key: string; salt: string; iv: string; auth_tag: string }>;
+  const { data: wallets, error: fetchError } = await supabase()
+    .from('mining_wallets')
+    .select('id, encrypted_key, salt, iv, auth_tag');
+
+  if (fetchError) throw fetchError;
 
   let walletsRotated = 0;
   let walletsFailed = 0;
 
-  const updateStmt = db.prepare(`
-    UPDATE mining_wallets SET encrypted_key = ?, salt = ?, iv = ?, auth_tag = ?, updated_at = unixepoch()
-    WHERE id = ?
-  `);
+  for (const wallet of (wallets || [])) {
+    try {
+      // Decrypt with old key
+      const encryptedData: import('../mining/encryption.js').EncryptedData = {
+        encrypted: wallet.encrypted_key,
+        salt: wallet.salt,
+        iv: wallet.iv,
+        authTag: wallet.auth_tag,
+      };
+      const decrypted = decryptPrivateKey(encryptedData, oldKey);
 
-  const rotateTransaction = db.transaction(() => {
-    for (const wallet of wallets) {
-      try {
-        // Decrypt with old key - construct EncryptedData object
-        const encryptedData: import('../mining/encryption.js').EncryptedData = {
-          encrypted: wallet.encrypted_key,
-          salt: wallet.salt,
-          iv: wallet.iv,
-          authTag: wallet.auth_tag,
-        };
-        const decrypted = decryptPrivateKey(encryptedData, oldKey);
+      // Re-encrypt with new key
+      const reEncrypted = encryptPrivateKey(decrypted, newKey);
 
-        // Re-encrypt with new key
-        const reEncrypted = encryptPrivateKey(decrypted, newKey);
+      // Update wallet
+      const { error: updateError } = await supabase()
+        .from('mining_wallets')
+        .update({
+          encrypted_key: reEncrypted.encrypted,
+          salt: reEncrypted.salt,
+          iv: reEncrypted.iv,
+          auth_tag: reEncrypted.authTag,
+          updated_at: Math.floor(Date.now() / 1000),
+        })
+        .eq('id', wallet.id);
 
-        updateStmt.run(
-          reEncrypted.encrypted,
-          reEncrypted.salt,
-          reEncrypted.iv,
-          reEncrypted.authTag,
-          wallet.id
-        );
-
-        walletsRotated++;
-      } catch (error) {
-        walletsFailed++;
-        logger.error(`Failed to rotate key for wallet ${wallet.id}:`, {
-          error: (error as Error).message,
-          walletId: wallet.id,
-        });
-      }
+      if (updateError) throw updateError;
+      walletsRotated++;
+    } catch (error) {
+      walletsFailed++;
+      logger.error(`Failed to rotate key for wallet ${wallet.id}:`, {
+        error: (error as Error).message,
+        walletId: wallet.id,
+      });
     }
-  });
+  }
 
   try {
-    rotateTransaction();
-
     // Archive old key hash
-    archiveOldKeyHash(oldKey);
+    await archiveOldKeyHash(oldKey);
 
     // Update the environment variable (in-memory only; must be updated in .env manually)
     process.env.ENCRYPTION_KEY = newKey;
@@ -186,25 +181,35 @@ export async function rotateEncryptionKey(newKey: string): Promise<KeyRotationRe
 /**
  * Get key rotation history
  */
-export function getKeyRotationHistory(): Array<{
+export async function getKeyRotationHistory(): Promise<Array<{
   id: number;
   oldKeyHash: string;
   newKeyHash: string;
   rotatedAt: number;
   walletsRotated: number;
   walletsFailed: number;
-}> {
+}>> {
   try {
-    return db.prepare(`
-      SELECT * FROM key_rotation_log ORDER BY rotated_at DESC LIMIT 10
-    `).all() as Array<{
-      id: number;
-      oldKeyHash: string;
-      newKeyHash: string;
-      rotatedAt: number;
-      walletsRotated: number;
-      walletsFailed: number;
-    }>;
+    const { data, error } = await supabase()
+      .from('mining_logs')
+      .select('id, metadata, created_at')
+      .eq('action', 'KEY_ROTATION')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+
+    return (data || []).map((row: any) => {
+      const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+      return {
+        id: row.id,
+        oldKeyHash: meta?.old_key_hash || '',
+        newKeyHash: meta?.new_key_hash || '',
+        rotatedAt: meta?.rotated_at || 0,
+        walletsRotated: 0,
+        walletsFailed: 0,
+      };
+    });
   } catch {
     return [];
   }

@@ -1,7 +1,20 @@
-// Event Processing Service for Mining Automation
+/**
+ * Event Processing Service for Mining Automation - Async/Supabase version
+ * 
+ * All database operations are async and use Supabase for persistence.
+ */
+
 import { ethers } from 'ethers';
-import { eventOps, dropOps, walletOps, logOps, configOps, db } from './database.js';
-import { MiningWallet, decryptWalletKey, updateWalletStatus } from './walletService.js';
+import {
+  eventOps,
+  dropOps,
+  walletOps,
+  logOps,
+  configOps,
+  MiningWallet,
+  MiningConfig,
+} from './databaseAdapter.js';
+import { decryptWalletKey, updateWalletStatus } from './walletServiceAsync.js';
 
 const CONTRACTS = {
   EVENT_MANAGER: '0x2CAf752814f244b3778e30c27051cc6B45CB1fc9',
@@ -29,35 +42,6 @@ const NFT_MANAGER_ABI = [
   'function mintMerchantNFT(uint8 _nftType, string _name, string _description, string _businessAddress, string _website, string _socialMedia)',
 ];
 
-export interface MiningEvent {
-  id: number;
-  wallet_id: number;
-  chain_event_id: number | null;
-  status: string;
-  drops_checklist: string;
-  drop_1_completed: number;
-  drop_1_tx_hash: string | null;
-  drop_2_completed: number;
-  drop_2_tx_hash: string | null;
-  total_dropped: string | null;
-  reward_eligible: number;
-  reward_received: string | null;
-  started_at: number;
-  finished_at: number | null;
-}
-
-export interface MiningConfig {
-  recipient_address_1: string;
-  recipient_address_2: string;
-  fcc_per_recipient: string;
-  total_fcc_per_event: string;
-  expected_mining_reward: string;
-  offset_minutes: number;
-  max_retries: number;
-  scheduler_enabled: number;
-  max_concurrent_wallets: number;
-}
-
 /**
  * Process a single wallet through the mining workflow
  */
@@ -66,23 +50,19 @@ export async function processWallet(
   passphrase: string,
   provider: ethers.JsonRpcProvider
 ): Promise<void> {
-  const config = configOps.get.get() as MiningConfig;
-  
+  const config = await configOps.get() as MiningConfig;
+
   // Validate config
   if (!config.recipient_address_1 || !config.recipient_address_2) {
     throw new Error('Recipients not configured');
   }
 
   // Get signer
-  const privateKey = decryptWalletKey(wallet, passphrase);
+  const privateKey = await decryptWalletKey(wallet, passphrase);
   const signer = new ethers.Wallet(privateKey, provider);
 
-  // Enforce 2-minute timeout on all contract calls
-  const TX_TIMEOUT_MS = 120000;
-
   // Create event record
-  const eventResult = eventOps.insert.run({ wallet_id: wallet.id });
-  const eventId = eventResult.lastInsertRowid as number;
+  const eventId = await eventOps.insert(wallet.id);
 
   try {
     // Step 1: Check/Mint NFT if needed
@@ -99,17 +79,15 @@ export async function processWallet(
       await executeDrop(signer, chainEventId, config.recipient_address_1, config.fcc_per_recipient, 1, eventId);
       drop1Success = true;
     } catch (drop1Error) {
-      // Drop 1 failed - entire event fails
-      eventOps.updateStatus.run({ id: eventId, status: 'FAILED' });
+      await eventOps.updateStatus(eventId, 'FAILED');
       throw drop1Error;
     }
 
     try {
       await executeDrop(signer, chainEventId, config.recipient_address_2, config.fcc_per_recipient, 2, eventId);
     } catch (drop2Error) {
-      // Drop 2 failed but Drop 1 succeeded - mark as PARTIAL
-      eventOps.updateStatus.run({ id: eventId, status: 'PARTIAL' });
-      logOps.insert.run({
+      await eventOps.updateStatus(eventId, 'PARTIAL');
+      await logOps.insert({
         wallet_id: wallet.id,
         event_id: eventId,
         level: 'WARN',
@@ -134,16 +112,13 @@ export async function processWallet(
 
     // Update wallet for next cycle
     const finishedAt = Math.floor(Date.now() / 1000);
-    walletOps.updateLastEvent.run({
-      id: wallet.id,
-      last_event_id: eventId,
-      next_event_at: finishedAt + (config.offset_minutes * 60),
-    });
+    await walletOps.updateLastEvent(wallet.id, eventId, finishedAt + (config.offset_minutes * 60));
 
     // Reset failure count on success
-    updateWalletStatus(wallet.id, 'active', 0, null);
+    await updateWalletStatus(wallet.id, 'active', 0, null);
 
-    logOps.insert.run({
+
+    await logOps.insert({
       wallet_id: wallet.id,
       event_id: eventId,
       level: 'SUCCESS',
@@ -154,17 +129,14 @@ export async function processWallet(
     });
   } catch (error) {
     // Update event as failed
-    eventOps.updateError.run({
-      id: eventId,
-      error: (error as Error).message,
-    });
+    await eventOps.updateError(eventId, (error as Error).message);
 
     // Update wallet failure count
-    const newFailureCount = wallet.failure_count + 1;
-    const newStatus = newFailureCount >= config.max_retries ? 'error' : 'active';
-    updateWalletStatus(wallet.id, newStatus, newFailureCount, (error as Error).message);
+    const newFailureCount = (wallet.failure_count || 0) + 1;
+    const newStatus = newFailureCount >= (config.max_retries || 3) ? 'error' : 'active';
+    await updateWalletStatus(wallet.id, newStatus as 'active' | 'paused' | 'error' | 'nft_expired', newFailureCount, (error as Error).message);
 
-    logOps.insert.run({
+    await logOps.insert({
       wallet_id: wallet.id,
       event_id: eventId,
       level: 'ERROR',
@@ -188,7 +160,7 @@ async function mintNFT(
 ): Promise<void> {
   const nftManager = new ethers.Contract(CONTRACTS.NFT_MANAGER, NFT_MANAGER_ABI, signer);
 
-  logOps.insert.run({
+  await logOps.insert({
     wallet_id: walletId,
     event_id: eventId,
     level: 'INFO',
@@ -198,7 +170,6 @@ async function mintNFT(
     metadata: null,
   });
 
-  // Mint Basic NFT (type 2)
   const tx = await nftManager.mintMerchantNFT(
     2, // BASIC
     'Mining Wallet',
@@ -209,8 +180,7 @@ async function mintNFT(
   );
 
   const receipt = await tx.wait();
-  
-  // Validate receipt
+
   if (!receipt) {
     throw new Error('NFT mint transaction failed - no receipt');
   }
@@ -220,14 +190,9 @@ async function mintNFT(
 
   // Update wallet NFT info
   const expiryTimestamp = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60);
-  walletOps.updateNFT.run({
-    id: walletId,
-    nft_type: 'BASIC',
-    nft_expiry_at: expiryTimestamp,
-    nft_token_id: null,
-  });
+  await walletOps.updateNFT(walletId, 'BASIC', expiryTimestamp, null);
 
-  logOps.insert.run({
+  await logOps.insert({
     wallet_id: walletId,
     event_id: eventId,
     level: 'SUCCESS',
@@ -253,7 +218,7 @@ async function createOnChainEvent(
   const totalAmount = ethers.parseUnits(config.total_fcc_per_event, 6);
   const dropAmount = ethers.parseUnits(config.fcc_per_recipient, 6);
 
-  logOps.insert.run({
+  await logOps.insert({
     wallet_id: walletId,
     event_id: eventId,
     level: 'INFO',
@@ -283,12 +248,11 @@ async function createOnChainEvent(
     dropAmount,
     dropAmount,
     deadline,
-    { gasLimit: 500000 } // Gas limit to prevent griefing (typical createEvent ~250k gas)
+    { gasLimit: 500000 }
   );
 
   const receipt = await tx.wait();
-  
-  // Validate receipt
+
   if (!receipt) {
     throw new Error('Event creation transaction failed - no receipt');
   }
@@ -300,12 +264,9 @@ async function createOnChainEvent(
   const chainEventId = Number(await eventManager.activityIdAcc());
 
   // Update event record
-  eventOps.updateChainId.run({
-    id: eventId,
-    chain_event_id: chainEventId,
-  });
+  await eventOps.updateChainId(eventId, chainEventId);
 
-  logOps.insert.run({
+  await logOps.insert({
     wallet_id: walletId,
     event_id: eventId,
     level: 'SUCCESS',
@@ -333,15 +294,10 @@ async function executeDrop(
   const dropAmount = ethers.parseUnits(amount, 6);
 
   // Insert drop record
-  const dropResult = dropOps.insert.run({
-    event_id: eventId,
-    recipient_address: recipient,
-    amount,
-    drop_number: dropNumber,
-  });
-  const dropId = dropResult.lastInsertRowid as number;
+  const dropRecord = await dropOps.insert(eventId, recipient, amount, dropNumber);
+  const dropId = dropRecord.id;
 
-  logOps.insert.run({
+  await logOps.insert({
     wallet_id: null,
     event_id: eventId,
     level: 'INFO',
@@ -353,18 +309,17 @@ async function executeDrop(
 
   try {
     const tx = await eventManager.drop(chainEventId, recipient, dropAmount, {
-      gasLimit: 300000, // Gas limit to prevent griefing (typical drop ~150k gas)
+      gasLimit: 300000,
     });
-    
+
     // Wait with timeout
     const receipt = await Promise.race([
       tx.wait(1),
-      new Promise<null>((_, reject) => 
+      new Promise<null>((_, reject) =>
         setTimeout(() => reject(new Error('Transaction confirmation timeout (120s)')), 120000)
       )
     ]);
-    
-    // Validate receipt
+
     if (!receipt) {
       throw new Error('Drop transaction failed - no receipt');
     }
@@ -373,32 +328,17 @@ async function executeDrop(
     }
 
     // Update drop record
-    dropOps.updateStatus.run({
-      id: dropId,
-      status: 'CONFIRMED',
-      tx_hash: receipt.hash,
-      block_number: receipt.blockNumber,
-      gas_used: receipt.gasUsed.toString(),
-    });
+    await dropOps.updateStatus(dropId, 'CONFIRMED', receipt.hash, receipt.blockNumber, receipt.gasUsed.toString());
 
     // Update event record
     if (dropNumber === 1) {
-      eventOps.updateDrop1.run({
-        id: eventId,
-        tx_hash: receipt.hash,
-        amount,
-      });
+      await eventOps.updateDrop1(eventId, receipt.hash, amount);
     } else {
       const totalAmount = (parseFloat(amount) * 2).toString();
-      eventOps.updateDrop2.run({
-        id: eventId,
-        tx_hash: receipt.hash,
-        amount,
-        total: totalAmount,
-      });
+      await eventOps.updateDrop2(eventId, receipt.hash, amount, totalAmount);
     }
 
-    logOps.insert.run({
+    await logOps.insert({
       wallet_id: null,
       event_id: eventId,
       level: 'SUCCESS',
@@ -411,10 +351,7 @@ async function executeDrop(
     // Small delay between drops
     await delay(2000);
   } catch (error) {
-    dropOps.updateError.run({
-      id: dropId,
-      error: (error as Error).message,
-    });
+    await dropOps.updateError(dropId, (error as Error).message);
     throw error;
   }
 }
@@ -432,9 +369,9 @@ async function monitorMiningReward(
   const startBalance = await fcc.balanceOf(walletAddress);
   const targetReward = ethers.parseUnits(expectedReward, 6);
 
-  eventOps.updateStatus.run({ id: eventId, status: 'MONITORING' });
+  await eventOps.updateStatus(eventId, 'MONITORING');
 
-  logOps.insert.run({
+  await logOps.insert({
     wallet_id: null,
     event_id: eventId,
     level: 'INFO',
@@ -454,20 +391,17 @@ async function monitorMiningReward(
 
     if (received >= targetReward) {
       const amount = ethers.formatUnits(received, 6);
-      
-      eventOps.updateReward.run({
-        id: eventId,
-        amount,
-      });
 
-      logOps.insert.run({
+      await eventOps.updateReward(eventId, amount);
+
+      await logOps.insert({
         wallet_id: null,
         event_id: eventId,
         level: 'SUCCESS',
         action: 'REWARD_RECEIVED',
         message: `Mining reward received: ${amount} FCC`,
         tx_hash: null,
-        metadata: JSON.stringify({ 
+        metadata: JSON.stringify({
           balance_before: ethers.formatUnits(startBalance, 6),
           balance_after: ethers.formatUnits(currentBalance, 6),
         }),
@@ -478,9 +412,9 @@ async function monitorMiningReward(
   }
 
   // Timeout
-  eventOps.updateStatus.run({ id: eventId, status: 'TIMEOUT' });
+  await eventOps.updateStatus(eventId, 'TIMEOUT');
 
-  logOps.insert.run({
+  await logOps.insert({
     wallet_id: null,
     event_id: eventId,
     level: 'WARN',
@@ -503,9 +437,9 @@ async function finishEvent(
 ): Promise<void> {
   const eventManager = new ethers.Contract(CONTRACTS.EVENT_MANAGER, EVENT_MANAGER_ABI, signer);
 
-  eventOps.updateStatus.run({ id: eventId, status: 'FINISHING' });
+  await eventOps.updateStatus(eventId, 'FINISHING');
 
-  logOps.insert.run({
+  await logOps.insert({
     wallet_id: null,
     event_id: eventId,
     level: 'INFO',
@@ -518,9 +452,9 @@ async function finishEvent(
   const tx = await eventManager.activityFinish(chainEventId);
   const receipt = await tx.wait();
 
-  eventOps.finish.run({ id: eventId });
+  await eventOps.finish(eventId);
 
-  logOps.insert.run({
+  await logOps.insert({
     wallet_id: null,
     event_id: eventId,
     level: 'SUCCESS',
@@ -530,30 +464,6 @@ async function finishEvent(
     metadata: null,
   });
 }
-
-/**
- * Get recent events
- */
-export function getRecentEvents(limit: number = 50): MiningEvent[] {
-  return eventOps.getRecent.all(limit) as MiningEvent[];
-}
-
-/**
- * Get events by wallet
- */
-export function getEventsByWallet(walletId: number): MiningEvent[] {
-  return eventOps.getByWallet.all(walletId) as MiningEvent[];
-}
-
-/**
- * Get mining statistics
- */
-export function getMiningStats() {
-  return statsOps.getOverview.get();
-}
-
-// Import statsOps
-import { statsOps } from './database.js';
 
 /**
  * Utility delay function

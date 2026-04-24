@@ -30,7 +30,7 @@ export type {
 export * from './mining/index.js';
 
 // Version info
-export const BACKEND_VERSION = '1.0.0';
+export const BACKEND_VERSION = '2.0.0-supabase';
 
 
 

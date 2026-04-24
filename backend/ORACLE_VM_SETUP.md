@@ -114,7 +114,7 @@ npm ci --omit=dev
 npm run build
 
 # Start with PM2 (load env from file)
-pm2 start dist/serverSupabase.js --name fishcake-backend --env-file ~/.env.fishcake
+pm2 start dist/server.js --name fishcake-backend --env-file .env
 
 # Save PM2 config
 pm2 save

@@ -238,7 +238,7 @@ export class MiningScheduler extends EventEmitter {
 
     try {
       // Import processWallet dynamically to avoid circular dependency
-      const { processWallet } = await import('./eventProcessor.js');
+      const { processWallet } = await import('./eventProcessorAsync.js');
       await processWallet(wallet, this.passphrase, this.provider);
       
       this.emit('wallet_complete', wallet);
