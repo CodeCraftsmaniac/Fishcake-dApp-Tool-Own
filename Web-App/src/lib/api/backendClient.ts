@@ -4,8 +4,13 @@
  * Connects the Web-App (Vercel) to the Backend Server (Oracle VM)
  */
 
-// API Base URL - MUST be set via environment variable in production
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// API Base URL - Use same-origin proxy in production browser to avoid mixed-content
+// In dev or server-side rendering, use direct backend URL
+const isServer = typeof window === 'undefined';
+const isProduction = process.env.NODE_ENV === 'production';
+const API_BASE_URL = isProduction && !isServer
+  ? '/api/proxy'  // Same-origin proxy route
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001');
 
 // JWT Token Management
 let accessToken: string | null = null;

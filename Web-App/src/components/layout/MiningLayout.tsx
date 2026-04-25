@@ -59,6 +59,7 @@ export function MiningLayout({ children, selectedWalletId, onSelectWallet }: Min
   const [backendRunning, setBackendRunning] = useState(false);
   const [passphrase, setPassphrase] = useState<string | null>(null);
   const [showPassphrasePrompt, setShowPassphrasePrompt] = useState(false);
+  const [hasAutoResumed, setHasAutoResumed] = useState(false);
 
   // Sync with backend status on mount and periodically
   const syncBackendStatus = useCallback(async () => {
@@ -87,6 +88,21 @@ export function MiningLayout({ children, selectedWalletId, onSelectWallet }: Min
     const interval = setInterval(syncBackendStatus, 10000);
     return () => clearInterval(interval);
   }, [syncBackendStatus]);
+
+  // Auto-resume on page refresh if passphrase exists in sessionStorage
+  useEffect(() => {
+    if (hasAutoResumed) return;
+    
+    const storedPassphrase = sessionStorage.getItem('mining_passphrase');
+    if (storedPassphrase && !backendRunning && !isLoading) {
+      console.log('[Auto-Resume] Found passphrase in sessionStorage, auto-starting automation...');
+      setHasAutoResumed(true);
+      // Delay to ensure backend connection is ready
+      setTimeout(() => startBackendAutomation(storedPassphrase), 500);
+    }
+    // Only run on mount and when backend state changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backendRunning]);
 
   // Handle start automation - needs passphrase
   const handleStartAutomation = async () => {
