@@ -33,6 +33,16 @@ jobs:
       - name: Run lint (if exists)
         run: npm run lint --if-present
 
+      - name: Upload built backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: |
+            backend/dist
+            backend/node_modules
+            backend/package.json
+          retention-days: 1
+
   # Web-App CI
   webapp-ci:
     name: Web-App CI
@@ -86,6 +96,10 @@ jobs:
         run: |
           npm ci
           npm run build
+          echo "=== Checking node_modules ==="
+          ls -la node_modules | head -5 || echo "node_modules not found!"
+          echo "=== Checking dist ==="
+          ls -la dist | head -5 || echo "dist not found!"
 
       - name: Setup SSH key
         run: |
