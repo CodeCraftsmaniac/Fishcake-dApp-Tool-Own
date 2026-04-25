@@ -167,11 +167,13 @@ jobs:
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key" \
             backend/node_modules/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/node_modules/
-          echo "=== Transferring package.json... ==="
+          echo "=== Transferring package.json and PM2 config... ==="
           rsync -az \
             -e "ssh -i ~/.ssh/deploy_key" \
             backend/package.json ecosystem.config.js \
             $VM_USER@$VM_HOST:~/fishcake-backend/
+          echo "=== Renaming ecosystem.config.js to .cjs for PM2... ==="
+          ssh -i ~/.ssh/deploy_key $VM_USER@$VM_HOST "cd ~/fishcake-backend && mv ecosystem.config.js ecosystem.config.cjs 2>/dev/null || true"
 
       - name: Start/Restart backend via PM2
         run: |
@@ -179,8 +181,8 @@ jobs:
             set -e
             cd ~/fishcake-backend
             echo "Starting/Restarting PM2..."
-            pm2 restart fishcake-backend 2>/dev/null || \
-              pm2 start backend/dist/server.js --name fishcake-backend
+            pm2 restart ecosystem.config.cjs 2>/dev/null || \
+              pm2 start ecosystem.config.cjs
             pm2 save
             pm2 status
           START
