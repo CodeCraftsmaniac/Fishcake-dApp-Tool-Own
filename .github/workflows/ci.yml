@@ -86,7 +86,6 @@ jobs:
         run: |
           npm ci
           npm run build
-          npm prune --production
 
       - name: Setup SSH key
         run: |
@@ -148,12 +147,18 @@ jobs:
 
       - name: Rsync built backend to VM
         run: |
-          rsync -az --delete --exclude='.env' \
+          echo "Transferring dist..."
+          rsync -az --delete --exclude='.env' --exclude='node_modules' \
             -e "ssh -i ~/.ssh/deploy_key" \
-            backend/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/
+            backend/dist/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/dist/
+          echo "Transferring node_modules..."
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            backend/node_modules/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/node_modules/
+          echo "Transferring package.json..."
           rsync -az \
             -e "ssh -i ~/.ssh/deploy_key" \
-            ecosystem.config.js \
+            backend/package.json ecosystem.config.js \
             $VM_USER@$VM_HOST:~/fishcake-backend/
 
       - name: Start/Restart backend via PM2
