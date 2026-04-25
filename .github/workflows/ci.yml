@@ -84,9 +84,8 @@ jobs:
       - name: Install & Build backend (in CI - fast)
         working-directory: backend
         run: |
-          npm install
+          npm ci
           npm run build
-          npm prune --omit=dev
 
       - name: Setup SSH key
         run: |
@@ -148,21 +147,23 @@ jobs:
 
       - name: Rsync built backend to VM
         run: |
-          rsync -az --delete --exclude='.env' \
+          rsync -az --delete --exclude='.env' --exclude='node_modules' \
             -e "ssh -i ~/.ssh/deploy_key" \
-            backend/dist/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/dist/
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/deploy_key" \
-            backend/node_modules/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/node_modules/
+            backend/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/
           rsync -az \
             -e "ssh -i ~/.ssh/deploy_key" \
-            backend/package.json ecosystem.config.js \
+            ecosystem.config.js \
             $VM_USER@$VM_HOST:~/fishcake-backend/
 
-      - name: Start/Restart backend via PM2
+      - name: Install dependencies and Start/Restart backend via PM2
         run: |
           ssh -i ~/.ssh/deploy_key $VM_USER@$VM_HOST << 'START'
+            set -e
+            cd ~/fishcake-backend/backend
+            echo "Installing production dependencies..."
+            npm ci --omit=dev
             cd ~/fishcake-backend
+            echo "Starting/Restarting PM2..."
             pm2 restart fishcake-backend 2>/dev/null || \
               pm2 start backend/dist/server.js --name fishcake-backend
             pm2 save
