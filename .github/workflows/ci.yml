@@ -94,12 +94,8 @@ jobs:
       - name: Install & Build backend (in CI - fast)
         working-directory: backend
         run: |
-          npm ci
+          npm install
           npm run build
-          echo "=== Checking node_modules ==="
-          ls -la node_modules | head -5 || echo "node_modules not found!"
-          echo "=== Checking dist ==="
-          ls -la dist | head -5 || echo "dist not found!"
 
       - name: Setup SSH key
         run: |
