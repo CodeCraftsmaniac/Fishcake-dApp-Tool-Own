@@ -157,15 +157,22 @@ jobs:
 
       - name: Rsync built backend to VM
         run: |
-          echo "Transferring dist..."
+          echo "=== Current directory ==="
+          pwd
+          echo "=== Listing files ==="
+          ls -la
+          echo "=== Listing backend/ ==="
+          ls -la backend/ || echo "backend/ not found!"
+          echo "=== Transferring dist... ==="
           rsync -az --delete --exclude='.env' --exclude='node_modules' \
             -e "ssh -i ~/.ssh/deploy_key" \
             backend/dist/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/dist/
-          echo "Transferring node_modules..."
+          echo "=== Transferring node_modules... ==="
+          ls -la backend/node_modules | head -3 || echo "node_modules not found before rsync!"
           rsync -az --delete \
             -e "ssh -i ~/.ssh/deploy_key" \
             backend/node_modules/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/node_modules/
-          echo "Transferring package.json..."
+          echo "=== Transferring package.json... ==="
           rsync -az \
             -e "ssh -i ~/.ssh/deploy_key" \
             backend/package.json ecosystem.config.js \
