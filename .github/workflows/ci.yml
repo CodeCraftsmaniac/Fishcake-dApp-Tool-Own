@@ -86,6 +86,7 @@ jobs:
         run: |
           npm ci
           npm run build
+          npm prune --production
 
       - name: Setup SSH key
         run: |
@@ -147,7 +148,7 @@ jobs:
 
       - name: Rsync built backend to VM
         run: |
-          rsync -az --delete --exclude='.env' --exclude='node_modules' \
+          rsync -az --delete --exclude='.env' \
             -e "ssh -i ~/.ssh/deploy_key" \
             backend/ $VM_USER@$VM_HOST:~/fishcake-backend/backend/
           rsync -az \
@@ -155,22 +156,10 @@ jobs:
             ecosystem.config.js \
             $VM_USER@$VM_HOST:~/fishcake-backend/
 
-      - name: Install dependencies and Start/Restart backend via PM2
+      - name: Start/Restart backend via PM2
         run: |
           ssh -i ~/.ssh/deploy_key $VM_USER@$VM_HOST << 'START'
             set -e
-            # Add swap if not exists (VM has only 1GB RAM)
-            if [ ! -f /swapfile ]; then
-              echo "Creating swap space..."
-              sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
-              sudo chmod 600 /swapfile
-              sudo mkswap /swapfile
-              sudo swapon /swapfile
-              echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-            fi
-            cd ~/fishcake-backend/backend
-            echo "Installing production dependencies..."
-            npm install --production --no-audit --max-old-space-size=512
             cd ~/fishcake-backend
             echo "Starting/Restarting PM2..."
             pm2 restart fishcake-backend 2>/dev/null || \
