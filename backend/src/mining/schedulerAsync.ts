@@ -182,30 +182,43 @@ export class MiningScheduler extends EventEmitter {
         return;
       }
 
+      const maxConcurrent = config.max_concurrent_wallets || 3;
+      
+      // Early return if already processing max wallets (race condition fix)
+      if (this.processingWallets.size >= maxConcurrent) {
+        this.emit('log', { 
+          level: 'debug', 
+          message: `Tick skipped: ${this.processingWallets.size} wallets already processing (max: ${maxConcurrent})` 
+        });
+        return;
+      }
+
       // Update tick timestamp in database
       await schedulerOps.updateTick(JSON.stringify([...this.processingWallets]));
 
-      // Get ready wallets
+      // Calculate available slots
+      const availableSlots = maxConcurrent - this.processingWallets.size;
+      
+      // Get ready wallets (limited to available slots)
       const readyWallets = await walletOps.getReadyForEvent(
         config.offset_minutes,
-        config.max_concurrent_wallets || 3
+        availableSlots
       );
 
       this.emit('log', { 
         level: 'debug', 
-        message: `Tick: ${readyWallets.length} wallets ready, ${this.processingWallets.size} processing` 
+        message: `Tick: ${readyWallets.length} wallets ready, ${this.processingWallets.size} processing, ${availableSlots} slots available` 
       });
 
-      // Filter out wallets currently being processed
+      // Filter out wallets currently being processed (extra safety)
       const walletsToProcess = readyWallets.filter(
         (w: MiningWallet) => !this.processingWallets.has(w.id)
       );
 
       // Process wallets with controlled concurrency
-      const maxConcurrent = config.max_concurrent_wallets || 3;
-      for (let i = 0; i < walletsToProcess.length; i += maxConcurrent) {
-        const batch = walletsToProcess.slice(i, i + maxConcurrent);
-        await Promise.all(batch.map(wallet => this.processWalletAsync(wallet)));
+      for (const wallet of walletsToProcess) {
+        if (this.processingWallets.size >= maxConcurrent) break;
+        await this.processWalletAsync(wallet);
       }
     } catch (error) {
       this.emit('error', error);

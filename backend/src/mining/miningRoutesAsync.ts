@@ -32,6 +32,38 @@ const router = Router();
 // Track connected SSE clients
 const sseClients = new Set<Response>();
 
+// JWT Secret validation
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  logger.error('❌ JWT_SECRET environment variable is required!');
+  process.exit(1);
+}
+
+// JWT Authentication middleware
+function authenticateToken(req: Request, res: Response, next: Function): void {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  
+  if (!token) {
+    res.status(401).json({ success: false, error: 'Access token required' });
+    return;
+  }
+  
+  import('jsonwebtoken').then(jwtModule => {
+    const jwt = jwtModule.default || jwtModule;
+    jwt.verify(token, JWT_SECRET!, (err: Error | null, decoded: unknown) => {
+      if (err) {
+        res.status(403).json({ success: false, error: 'Invalid or expired token' });
+        return;
+      }
+      (req as any).user = decoded;
+      next();
+    });
+  }).catch(() => {
+    res.status(500).json({ success: false, error: 'Authentication error' });
+  });
+}
+
 // Initialize RPC health monitoring
 initializeRpcHealth();
 startHealthMonitoring();
@@ -565,7 +597,7 @@ router.get('/logs', async (req: Request, res: Response) => {
  * GET /api/mining/stream
  * Server-Sent Events for real-time updates
  */
-router.get('/stream', async (req: Request, res: Response) => {
+router.get('/stream', authenticateToken, async (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -750,13 +782,13 @@ router.get('/workflows', async (_req: Request, res: Response) => {
       const latestEvent = events && events.length > 0 ? events[0] : null;
       workflows.push({
         walletAddress: wallet.address,
-        steps: latestEvent ? [
-          { name: 'Event Created', status: 'completed', timestamp: new Date((latestEvent.started_at || 0) * 1000).toISOString() },
-          { name: 'Drop 1', status: latestEvent.drop_1_completed ? 'completed' : 'pending', txHash: latestEvent.drop_1_tx_hash },
-          { name: 'Drop 2', status: latestEvent.drop_2_completed ? 'completed' : 'pending', txHash: latestEvent.drop_2_tx_hash },
-          { name: 'Reward', status: latestEvent.reward_received ? 'completed' : 'pending' },
-          { name: 'Finish', status: latestEvent.status === 'FINISHED' ? 'completed' : latestEvent.status?.toLowerCase() || 'pending' },
-        ] : [],
+        steps: [
+          { name: 'Event Created', status: latestEvent ? 'completed' : 'pending', timestamp: latestEvent ? new Date((latestEvent.started_at || 0) * 1000).toISOString() : null },
+          { name: 'Drop 1', status: latestEvent?.drop_1_completed ? 'completed' : 'pending', txHash: latestEvent?.drop_1_tx_hash || null },
+          { name: 'Drop 2', status: latestEvent?.drop_2_completed ? 'completed' : 'pending', txHash: latestEvent?.drop_2_tx_hash || null },
+          { name: 'Reward', status: latestEvent?.reward_received ? 'completed' : 'pending' },
+          { name: 'Finish', status: latestEvent?.status === 'FINISHED' ? 'completed' : latestEvent?.status?.toLowerCase() || 'pending' },
+        ],
       });
     }
     res.json({ success: true, data: workflows });
@@ -780,13 +812,13 @@ router.get('/workflows/:address', async (req: Request, res: Response) => {
     const latestEvent = events && events.length > 0 ? events[0] : null;
     const workflow = {
       walletAddress: wallet.address,
-      steps: latestEvent ? [
-        { name: 'Event Created', status: 'completed', timestamp: new Date((latestEvent.started_at || 0) * 1000).toISOString() },
-        { name: 'Drop 1', status: latestEvent.drop_1_completed ? 'completed' : 'pending', txHash: latestEvent.drop_1_tx_hash },
-        { name: 'Drop 2', status: latestEvent.drop_2_completed ? 'completed' : 'pending', txHash: latestEvent.drop_2_tx_hash },
-        { name: 'Reward', status: latestEvent.reward_received ? 'completed' : 'pending' },
-        { name: 'Finish', status: latestEvent.status === 'FINISHED' ? 'completed' : latestEvent.status?.toLowerCase() || 'pending' },
-      ] : [],
+      steps: [
+        { name: 'Event Created', status: latestEvent ? 'completed' : 'pending', timestamp: latestEvent ? new Date((latestEvent.started_at || 0) * 1000).toISOString() : null },
+        { name: 'Drop 1', status: latestEvent?.drop_1_completed ? 'completed' : 'pending', txHash: latestEvent?.drop_1_tx_hash || null },
+        { name: 'Drop 2', status: latestEvent?.drop_2_completed ? 'completed' : 'pending', txHash: latestEvent?.drop_2_tx_hash || null },
+        { name: 'Reward', status: latestEvent?.reward_received ? 'completed' : 'pending' },
+        { name: 'Finish', status: latestEvent?.status === 'FINISHED' ? 'completed' : latestEvent?.status?.toLowerCase() || 'pending' },
+      ],
     };
     res.json({ success: true, data: workflow });
   } catch (error) {
@@ -841,7 +873,6 @@ router.post('/auth/login', async (req: Request, res: Response) => {
 
     const jwtModule = await import('jsonwebtoken');
     const jwt = jwtModule.default || jwtModule;
-    const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
     const userId = 'admin';
 
     const accessToken = jwt.sign({ userId, type: 'access' }, JWT_SECRET, { expiresIn: '15m' });

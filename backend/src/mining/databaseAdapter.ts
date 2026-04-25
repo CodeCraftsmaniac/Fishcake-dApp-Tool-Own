@@ -373,7 +373,7 @@ export const configOps = {
     if (error) throw error;
   },
 
-  async updateScheduler(enabled: number, intervalHours: number, offsetMinutes: number, maxConcurrent: number): Promise<void> {
+  async updateScheduler(enabled: number, intervalHours: number, offsetMinutes: number, maxConcurrent: number, maxConcurrentWallets?: number): Promise<void> {
     const { error } = await db()
       .from('mining_config')
       .update({
@@ -381,7 +381,7 @@ export const configOps = {
         event_interval_hours: intervalHours,
         offset_minutes: offsetMinutes,
         max_concurrent_events: maxConcurrent,
-        max_concurrent_wallets: maxConcurrent,
+        max_concurrent_wallets: maxConcurrentWallets ?? maxConcurrent,
         })
       .eq('id', 1);
     

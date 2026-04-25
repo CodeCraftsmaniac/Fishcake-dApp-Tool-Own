@@ -15,6 +15,7 @@ import {
   MiningConfig,
 } from './databaseAdapter.js';
 import { decryptWalletKey, updateWalletStatus } from './walletServiceAsync.js';
+import logger from '../utils/logger.js';
 
 const CONTRACTS = {
   EVENT_MANAGER: '0x2CAf752814f244b3778e30c27051cc6B45CB1fc9',
@@ -42,6 +43,64 @@ const NFT_MANAGER_ABI = [
   'function mintMerchantNFT(uint8 _nftType, string _name, string _description, string _businessAddress, string _website, string _socialMedia)',
 ];
 
+// Minimum POL balance required for gas (0.01 POL)
+const MIN_POL_BALANCE = ethers.parseEther('0.01');
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
+/**
+ * Retry wrapper for async operations
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  maxRetries: number = MAX_RETRIES
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error as Error;
+      if (attempt < maxRetries) {
+        logger.warn(`${operationName} failed (attempt ${attempt}/${maxRetries}), retrying...`, {
+          error: lastError.message,
+        });
+        await delay(RETRY_DELAY_MS * attempt); // Exponential backoff
+      }
+    }
+  }
+  
+  throw new Error(`${operationName} failed after ${maxRetries} attempts: ${lastError?.message}`);
+}
+
+/**
+ * Check if wallet has sufficient POL balance for gas
+ */
+async function checkPolBalance(signer: ethers.Wallet, walletId: number, eventId: number): Promise<void> {
+  const balance = await signer.provider!.getBalance(signer.address);
+  
+  if (balance < MIN_POL_BALANCE) {
+    const balanceEth = ethers.formatEther(balance);
+    const minEth = ethers.formatEther(MIN_POL_BALANCE);
+    
+    await logOps.insert({
+      wallet_id: walletId,
+      event_id: eventId,
+      level: 'ERROR',
+      action: 'INSUFFICIENT_POL',
+      message: `Insufficient POL balance: ${balanceEth} < ${minEth} required`,
+      tx_hash: null,
+      metadata: JSON.stringify({ balance: balanceEth, minimum: minEth }),
+    });
+    
+    throw new Error(`Insufficient POL balance: ${balanceEth} POL (minimum ${minEth} POL required)`);
+  }
+}
+
 /**
  * Process a single wallet through the mining workflow
  */
@@ -63,6 +122,9 @@ export async function processWallet(
 
   // Create event record
   const eventId = await eventOps.insert(wallet.id);
+  
+  // Check POL balance before starting
+  await checkPolBalance(signer, wallet.id, eventId);
 
   try {
     // Step 1: Check/Mint NFT if needed
@@ -99,12 +161,14 @@ export async function processWallet(
       throw drop2Error;
     }
 
-    // Step 4: Monitor for mining reward
-    const rewardReceived = await monitorMiningReward(
+    // Step 4: Monitor for mining reward (non-blocking)
+    // Start monitoring in background, don't block workflow
+    monitorMiningRewardNonBlocking(
       signer.address,
       config.expected_mining_reward,
       provider,
-      eventId
+      eventId,
+      wallet.id
     );
 
     // Step 5: Finish event
@@ -123,7 +187,7 @@ export async function processWallet(
       event_id: eventId,
       level: 'SUCCESS',
       action: 'MINING_COMPLETE',
-      message: `Mining cycle completed. Reward: ${rewardReceived ? config.expected_mining_reward : '0'} FCC`,
+      message: `Mining cycle completed. Event finishing, reward monitoring in background.`,
       tx_hash: null,
       metadata: JSON.stringify({ chain_event_id: chainEventId }),
     });
@@ -357,13 +421,30 @@ async function executeDrop(
 }
 
 /**
+ * Monitor for mining reward (background task - non-blocking)
+ */
+async function monitorMiningRewardNonBlocking(
+  walletAddress: string,
+  expectedReward: string,
+  provider: ethers.JsonRpcProvider,
+  eventId: number,
+  walletId: number
+): Promise<void> {
+  // Run monitoring in background
+  monitorMiningReward(walletAddress, expectedReward, provider, eventId, walletId).catch(error => {
+    logger.error('Background mining reward monitoring failed:', { error: (error as Error).message });
+  });
+}
+
+/**
  * Monitor for mining reward
  */
 async function monitorMiningReward(
   walletAddress: string,
   expectedReward: string,
   provider: ethers.JsonRpcProvider,
-  eventId: number
+  eventId: number,
+  walletId: number
 ): Promise<boolean> {
   const fcc = new ethers.Contract(CONTRACTS.FCC_TOKEN, ERC20_ABI, provider);
   const startBalance = await fcc.balanceOf(walletAddress);
@@ -372,17 +453,17 @@ async function monitorMiningReward(
   await eventOps.updateStatus(eventId, 'MONITORING');
 
   await logOps.insert({
-    wallet_id: null,
+    wallet_id: walletId,
     event_id: eventId,
     level: 'INFO',
     action: 'REWARD_MONITOR_START',
-    message: `Monitoring for ${expectedReward} FCC mining reward...`,
+    message: `Background monitoring for ${expectedReward} FCC mining reward...`,
     tx_hash: null,
     metadata: JSON.stringify({ start_balance: ethers.formatUnits(startBalance, 6) }),
   });
 
-  // Poll every 30 seconds for up to 1 hour
-  const maxAttempts = 120;
+  // Poll every 30 seconds for up to 2 hours (increased from 1 hour)
+  const maxAttempts = 240;
   for (let i = 0; i < maxAttempts; i++) {
     await delay(30000);
 
@@ -395,7 +476,7 @@ async function monitorMiningReward(
       await eventOps.updateReward(eventId, amount);
 
       await logOps.insert({
-        wallet_id: null,
+        wallet_id: walletId,
         event_id: eventId,
         level: 'SUCCESS',
         action: 'REWARD_RECEIVED',
@@ -409,17 +490,18 @@ async function monitorMiningReward(
 
       return true;
     }
+    // Continue polling - no conditional delay needed
   }
 
   // Timeout
   await eventOps.updateStatus(eventId, 'TIMEOUT');
 
   await logOps.insert({
-    wallet_id: null,
+    wallet_id: walletId,
     event_id: eventId,
     level: 'WARN',
     action: 'REWARD_TIMEOUT',
-    message: 'Timeout waiting for mining reward (1 hour)',
+    message: 'Timeout waiting for mining reward (2 hours)',
     tx_hash: null,
     metadata: null,
   });
