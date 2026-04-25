@@ -159,9 +159,18 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key $VM_USER@$VM_HOST << 'START'
             set -e
+            # Add swap if not exists (VM has only 1GB RAM)
+            if [ ! -f /swapfile ]; then
+              echo "Creating swap space..."
+              sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile
+              echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+            fi
             cd ~/fishcake-backend/backend
             echo "Installing production dependencies..."
-            npm install --production
+            npm install --production --no-audit --max-old-space-size=512
             cd ~/fishcake-backend
             echo "Starting/Restarting PM2..."
             pm2 restart fishcake-backend 2>/dev/null || \
