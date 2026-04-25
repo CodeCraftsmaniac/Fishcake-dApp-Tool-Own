@@ -170,10 +170,8 @@ jobs:
           echo "=== Transferring package.json and PM2 config... ==="
           rsync -az \
             -e "ssh -i ~/.ssh/deploy_key" \
-            backend/package.json ecosystem.config.js \
+            backend/package.json ecosystem.config.cjs \
             $VM_USER@$VM_HOST:~/fishcake-backend/
-          echo "=== Renaming ecosystem.config.js to .cjs for PM2... ==="
-          ssh -i ~/.ssh/deploy_key $VM_USER@$VM_HOST "cd ~/fishcake-backend && mv ecosystem.config.js ecosystem.config.cjs 2>/dev/null || true"
 
       - name: Start/Restart backend via PM2
         run: |
