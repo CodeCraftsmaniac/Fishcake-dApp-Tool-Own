@@ -161,7 +161,7 @@ jobs:
             set -e
             cd ~/fishcake-backend/backend
             echo "Installing production dependencies..."
-            npm ci --omit=dev
+            npm install --production
             cd ~/fishcake-backend
             echo "Starting/Restarting PM2..."
             pm2 restart fishcake-backend 2>/dev/null || \
